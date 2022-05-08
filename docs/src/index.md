@@ -6,9 +6,10 @@ CurrentModule = CosmoParticleUtils
 
 Documentation for [CosmoParticleUtils](https://gitlab.com/juliacosmosims/CosmoParticleUtils.jl).
 
-```@index
-```
+## Functions
 
-```@autodocs
-Modules = [CosmoParticleUtils]
+```@docs
+half_mass_radius
+center_of_mass_iterative
+center_of_velocity
 ```

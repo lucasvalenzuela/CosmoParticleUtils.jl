@@ -1,2 +1,4 @@
 [deps]
+CosmoParticles = "b2fead7a-f6ae-4e5b-9c3d-9b85ace3042d"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
+Unitful = "1986cc42-f94f-5a68-af5c-568840ba703d"
