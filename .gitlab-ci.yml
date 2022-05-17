@@ -1,3 +1,14 @@
+before_script:
+  - 'command -v ssh-agent >/dev/null || ( apt-get update -y && apt-get install openssh-client -y )'
+  - eval $(ssh-agent -s)
+  - echo "$SSH_PRIVATE_KEY_MACHINE_USER" | tr -d '\r' | ssh-add -
+  - mkdir -p ~/.ssh
+  - chmod 700 ~/.ssh
+  - |
+    julia -e '
+      using Pkg
+      Registry.add("General")
+      Registry.add(RegistrySpec(url="git@gitlab.com:juliacosmosims/CosmoSimsRegistry.git"))'
 .script:
   script:
     - |
@@ -13,9 +24,11 @@
         using Pkg
         Pkg.add("Coverage")
         using Coverage
-        c, t = get_summary(process_folder())
+        processed = process_folder()
+        c, t = get_summary(processed)
         using Printf
-        @printf "Test coverage %.2f%%\n" 100c / t'
+        @printf "Test coverage %.2f%%\n" 100c / t
+        Codecov.submit_local(processed)'
 Julia 1.7:
   image: julia:1.7
   extends:
