@@ -21,14 +21,14 @@ before_script:
   after_script:
     - |
       julia -e '
-        using Pkg
-        Pkg.add("Coverage")
-        using Coverage
-        processed = process_folder()
-        c, t = get_summary(processed)
-        using Printf
-        @printf "Test coverage %.2f%%\n" 100c / t
-        Codecov.submit_local(processed)'
+        #using Pkg
+        #Pkg.add("Coverage")
+        #using Coverage
+        #processed = process_folder()
+        #c, t = get_summary(processed)
+        #using Printf
+        #@printf "Test coverage %.2f%%\n" 100c / t
+        #Codecov.submit_local(processed)'
 Julia 1.7:
   image: julia:1.7
   extends:
