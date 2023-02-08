@@ -8,6 +8,7 @@ makedocs(;
     authors="Lucas Valenzuela",
     repo="https://gitlab.com/juliacosmosims/CosmoParticleUtils.jl/blob/{commit}{path}#{line}",
     sitename="CosmoParticleUtils.jl",
+    devbranch="main",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
         canonical="https://juliacosmosims.gitlab.io/CosmoParticleUtils.jl",
