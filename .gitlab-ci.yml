@@ -29,11 +29,11 @@ before_script:
         #using Printf
         #@printf "Test coverage %.2f%%\n" 100c / t
         #Codecov.submit_local(processed)'
-Julia 1.7:
-  image: julia:1.7
-  extends:
-    - .script
-    - .coverage
+# Julia 1.7:
+  # image: julia:1.7
+  # extends:
+    # - .script
+    # - .coverage
 pages:
   image: julia:1.7
   stage: deploy
