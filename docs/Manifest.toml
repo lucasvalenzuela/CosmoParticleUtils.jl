@@ -91,7 +91,7 @@ version = "0.27.24"
 
 [[deps.FastUnitfulOperations]]
 deps = ["LinearAlgebra", "Unitful"]
-path = "../../FastUnitfulOperations"
+git-tree-sha1 = "9d9979425733df277234b14808d69481d529f41f"
 uuid = "b031420d-871e-4e9c-8878-33bec386257e"
 version = "0.1.2"
 
