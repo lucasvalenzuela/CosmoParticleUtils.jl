@@ -58,7 +58,7 @@ version = "0.1.1"
 
 [[deps.CosmoParticles]]
 deps = ["FastUnitfulOperations", "FillArrays", "LazyArrays", "LinearAlgebra", "Statistics", "StatsBase", "Unitful"]
-path = "../../CosmoParticles"
+git-tree-sha1 = "62dfe483e62c13d6a046ce72a8a8a6a68f0eaa6a"
 uuid = "b2fead7a-f6ae-4e5b-9c3d-9b85ace3042d"
 version = "0.2.14"
 
@@ -166,9 +166,9 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 
 [[deps.MatrixFactorizations]]
 deps = ["ArrayLayouts", "LinearAlgebra", "Printf", "Random"]
-git-tree-sha1 = "22cf8c4315c417300b753c0def0fcb94e83d79b1"
+git-tree-sha1 = "0ff59b4b9024ab9a736db1ad902d2b1b48441c19"
 uuid = "a3b82374-2e81-5b9e-98ce-41277c0e4c87"
-version = "0.9.5"
+version = "0.9.6"
 
 [[deps.Missings]]
 deps = ["DataAPI"]
