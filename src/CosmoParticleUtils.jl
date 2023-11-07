@@ -2,6 +2,8 @@ module CosmoParticleUtils
 
 using CosmoParticles
 using FastUnitfulOperations
+using FillArrays
+using FillArrays: AbstractFillVector
 using Statistics
 using StatsBase
 
@@ -67,7 +69,7 @@ end
 
 function half_mass_radius(
     r²::AbstractVector{<:Number},
-    mass=nothing;
+    mass::Union{Number,Nothing,AbstractFillVector}=nothing;
     rmax::Union{Number,Nothing}=nothing,
     sortalg=QuickSort, # not needed due to partialsort, but don't remove!
     sorted=false,
@@ -175,7 +177,7 @@ end
 function _mean_position!(r₀::AbstractVector, pos::AbstractMatrix, mass::AbstractVector, mask)
     @views mean!(r₀, pos[:, mask], weights(CosmoParticles.ustrip_lazy(mass[mask])); dims=2)
 end
-function _mean_position!(r₀::AbstractVector, pos::AbstractMatrix, _::Union{Number,Nothing}, mask)
+function _mean_position!(r₀::AbstractVector, pos::AbstractMatrix, _::Union{Number,Nothing,AbstractFillVector}, mask)
     @views mean!(r₀, pos[:, mask]; dims=2)
 end
 
@@ -237,7 +239,7 @@ end
 function _mean_velocity(vel_mask::AbstractMatrix, mass::AbstractVector, mask, mask2)
     @views mean(vel_mask[:, mask2], weights(CosmoParticles.ustrip_lazy(mass[mask][mask2])); dims=2)
 end
-function _mean_velocity(vel_mask::AbstractMatrix, _::Union{Number,Nothing}, _, mask2)
+function _mean_velocity(vel_mask::AbstractMatrix, _::Union{Number,Nothing,AbstractFillVector}, _, mask2)
     @views mean(vel_mask[:, mask2]; dims=2)
 end
 
