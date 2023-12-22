@@ -9,9 +9,6 @@ needed for dealing with particles in cosmological simulations.
 
 ## Installation
 
-Note that this package usually does not have to be directly installed by the user, instead install any of the
-implementing packages.
-
 To install the package, make sure the JuliaCosmoSims registry is installed
 ([JuliaCosmoSimsDocs](https://juliacosmosims.gitlab.io/JuliaCosmoSimsDocs/dev/installation)).
 
