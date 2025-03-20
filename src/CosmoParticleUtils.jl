@@ -1,9 +1,11 @@
 module CosmoParticleUtils
 
 using CosmoParticles
+using Distances
 using FastUnitfulOperations
 using FillArrays
 using FillArrays: AbstractFillVector
+using NearestNeighbors
 using Statistics
 using StatsBase
 
@@ -241,6 +243,17 @@ function _mean_velocity(vel_mask::AbstractMatrix, mass::AbstractVector, mask, ma
 end
 function _mean_velocity(vel_mask::AbstractMatrix, _::Union{Number,Nothing,AbstractFillVector}, _, mask2)
     @views mean(vel_mask[:, mask2]; dims=2)
+end
+
+
+function get_smoothing_lengths(pos, k; periodic=false, boxlengths=zeros(eltype(pos), size(pos, 1)))
+    if periodic
+        tree = BallTree(pos, PeriodicEuclidean(boxlengths))
+    else
+        tree = KDTree(pos, Euclidean())
+    end
+    idxs, dists = knn(tree, pos, k + 1)
+    return maximum.(dists)
 end
 
 
