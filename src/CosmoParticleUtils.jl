@@ -9,7 +9,7 @@ using NearestNeighbors
 using Statistics
 using StatsBase
 
-export half_mass_radius, center_of_mass_iterative, center_of_velocity
+export half_mass_radius, center_of_mass_iterative, center_of_velocity, get_smoothing_lengths
 
 
 """
@@ -246,16 +246,43 @@ function _mean_velocity(vel_mask::AbstractMatrix, _::Union{Number,Nothing,Abstra
 end
 
 
-function get_smoothing_lengths(pos, k; periodic=false, boxlengths=zeros(eltype(pos), size(pos, 1)))
+"""
+    get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=zeros(eltype(pos), size(pos, 1)))
+    get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, periodic=false, boxlengths=zeros(eltype(pos), size(pos, 1)))
+
+Gets the nth particle neighbor distances for the passed positions for each particle.
+
+The distances are determined with [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl)
+using a `KDTree` for non-periodic and `BallTree` for periodic nearest neighbors.
+The nth-nearest particle does not count the respective particle itself.
+
+# Keyword Arguments
+- `periodic=false`: whether the periodicity of the simulation box should be taken into account - this is only
+  necessary if the entire box is plotted and is significantly more computational intensive than non-periodic
+  smoothing
+- `boxlengths::AbstractVector`: vector of the box length in each direction; only needs to be set when `periodic`
+  is set to `true`
+
+# Examples
+julia```
+pos = rand(3, 100)
+k = 16
+get_smoothing_lengths(pos, k)
+```
+"""
+function get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=zeros(eltype(pos), size(pos, 1)))
     if periodic
         tree = BallTree(pos, PeriodicEuclidean(boxlengths))
     else
         tree = KDTree(pos, Euclidean())
     end
+
     idxs, dists = knn(tree, pos, k + 1)
+
     return maximum.(dists)
 end
 
+get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...) = get_smoothing_lengths(p[posprop], k; kwargs...)
 
 
 end # module
