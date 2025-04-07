@@ -34,11 +34,11 @@ end
 
 function half_mass_radius(
     r²::AbstractVector{<:Number},
-    mass::AbstractVector;
+    mass::AbstractVector{T};
     rmax::Union{Number,Nothing}=nothing,
     sortalg=QuickSort,
     sorted=false,
-)
+) where {T<:Number}
     # check dimensions
     @assert length(mass) == length(r²)
 
@@ -59,7 +59,7 @@ function half_mass_radius(
     end
 
     # traverse masses outwardly until half of the total mass is reached
-    mass_cumul = 0.0 # Float64 for sufficient accuracy
+    mass_cumul = Float64(zero(T)) # set Float64 to avoid losing precision for Float32
     i = 1
     @inbounds while mass_cumul < mass_half
         mass_cumul += mass_sorted[i]
