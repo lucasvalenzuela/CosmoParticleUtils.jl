@@ -1,7 +1,7 @@
 name = "CosmoParticleUtils"
 uuid = "f453d4ec-1e54-4ca6-8e37-2101cbe022c0"
 authors = ["Lucas Valenzuela"]
-version = "0.1.4"
+version = "0.2.0"
 
 [deps]
 CosmoParticles = "b2fead7a-f6ae-4e5b-9c3d-9b85ace3042d"
