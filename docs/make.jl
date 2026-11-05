@@ -16,9 +16,7 @@ makedocs(;
         canonical="https://lucasvalenzuela.github.io/CosmoParticleUtils.jl",
         assets=String[],
     ),
-    pages=[
-        "Home" => "index.md",
-    ],
+    pages=["Home" => "index.md"],
 )
 
 deploydocs(; repo="github.com/lucasvalenzuela/CosmoParticleUtils.jl", devbranch="main")
