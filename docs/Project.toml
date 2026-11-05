@@ -1,3 +1,11 @@
 [deps]
 CosmoParticleUtils = "f453d4ec-1e54-4ca6-8e37-2101cbe022c0"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DocumenterInterLinks = "d12716ef-a0f6-4df4-a9f1-a5a34e75c656"
+
+[sources]
+CosmoParticleUtils = {path = ".."}
+
+[compat]
+Documenter = "1.19"
+DocumenterInterLinks = "1.1"

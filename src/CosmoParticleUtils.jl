@@ -179,7 +179,12 @@ end
 function _mean_position!(r₀::AbstractVector, pos::AbstractMatrix, mass::AbstractVector, mask)
     @views mean!(r₀, pos[:, mask], weights(CosmoParticles.ustrip_lazy(mass[mask])); dims=2)
 end
-function _mean_position!(r₀::AbstractVector, pos::AbstractMatrix, _::Union{Number,Nothing,AbstractFillVector}, mask)
+function _mean_position!(
+    r₀::AbstractVector,
+    pos::AbstractMatrix,
+    _::Union{Number,Nothing,AbstractFillVector},
+    mask,
+)
     @views mean!(r₀, pos[:, mask]; dims=2)
 end
 
@@ -270,7 +275,12 @@ k = 16
 get_smoothing_lengths(pos, k)
 ```
 """
-function get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=zeros(eltype(pos), size(pos, 1)))
+function get_smoothing_lengths(
+    pos::AbstractMatrix,
+    k::Integer;
+    periodic=false,
+    boxlengths=zeros(eltype(pos), size(pos, 1)),
+)
     if periodic
         tree = BallTree(pos, PeriodicEuclidean(boxlengths))
     else
@@ -282,7 +292,8 @@ function get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, 
     return maximum.(dists)
 end
 
-get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...) = get_smoothing_lengths(p[posprop], k; kwargs...)
+get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...) =
+    get_smoothing_lengths(p[posprop], k; kwargs...)
 
 
 end # module

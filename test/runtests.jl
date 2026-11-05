@@ -1,10 +1,22 @@
 using CosmoParticleUtils
+using Aqua
+using ExplicitImports
+using JET
 using Test
 
 using CosmoParticles
 using Unitful
 
 @testset "CosmoParticleUtils.jl" begin
+    @testset "Code quality" begin
+        Aqua.test_all(CosmoParticleUtils)
+        @test check_no_stale_explicit_imports(CosmoParticleUtils) === nothing
+        @test check_no_self_qualified_accesses(CosmoParticleUtils) === nothing
+        if JET.JET_AVAILABLE
+            JET.test_package(CosmoParticleUtils; target_modules=(CosmoParticleUtils,))
+        end
+    end
+
     # create regular grid in d dimensions from -val to val with n points along each dimension
     creategrid(d, n, val) =
         reduce(hcat, collect.(Iterators.product((LinRange(-val, val, n) for _ in 1:d)...)))
