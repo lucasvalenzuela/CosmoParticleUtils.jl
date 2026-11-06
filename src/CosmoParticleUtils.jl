@@ -199,22 +199,25 @@ end
     center_of_velocity(pos::AbstractMatrix{<:Number}, vel::AbstractMatrix{<:Number}, mass::Union{Number,AbstractVector{<:Number}}, radius::Number)
     center_of_velocity(p::AbstractParticles, [radius::Number]; posprop=:pos, velprop=:vel, massprop=:mass)
 
-Returns mass-weighted mean velocity within `radius` around `r₀`, only considering absolute velocities
-smaller than the `p`th quantile (any value between 0 and 1) when centered around the median velocity.
+Returns the [mass-weighted mean](@extref StatsBase Statistics.mean) velocity vector within
+`radius` around `r0`, only considering absolute velocities smaller than the `p`th
+[`quantile`](@extref Statistics.quantile) (any value between 0 and 1) when centered around the
+[`median`](@extref Statistics.median) velocity. The median and the quantile are not weighted.
 
 # Keyword arguments
 - `p::Real=0.9`
-- `r0::Union{AbstractVector{<:Number},Nothing}=zeros(size(pos, 1))`
+- `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center of the sphere; `nothing` is the
+  origin
 """
 function center_of_velocity(
-    pos::AbstractMatrix{T},
+    pos::AbstractMatrix{<:Number},
     vel::AbstractMatrix{<:Number},
     mass,
     radius::Number;
     p::Real=0.9,
-    r0::Union{AbstractVector{<:Number},Nothing}=zeros(T, size(pos, 1)),
-) where {T<:Number}
-    r² = colnorm2(pos, r0)
+    r0::Union{AbstractVector{<:Number},Nothing}=nothing,
+)
+    r² = isnothing(r0) ? colnorm2(pos) : colnorm2(pos, r0)
     mask = r² .≤ radius^2
     vel_mask = vel[:, mask]
 
@@ -249,10 +252,10 @@ function center_of_velocity(
 end
 
 function _mean_velocity(vel_mask::AbstractMatrix, mass::AbstractVector, mask, mask2)
-    @views mean(vel_mask[:, mask2], weights(CosmoParticles.ustrip_lazy(mass[mask][mask2])); dims=2)
+    @views vec(mean(vel_mask[:, mask2], weights(CosmoParticles.ustrip_lazy(mass[mask][mask2])); dims=2))
 end
 function _mean_velocity(vel_mask::AbstractMatrix, _::Union{Number,Nothing,AbstractFillVector}, _, mask2)
-    @views mean(vel_mask[:, mask2]; dims=2)
+    @views vec(mean(vel_mask[:, mask2]; dims=2))
 end
 
 

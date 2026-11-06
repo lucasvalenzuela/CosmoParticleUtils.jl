@@ -4,7 +4,10 @@ using DocumenterInterLinks
 
 DocMeta.setdocmeta!(CosmoParticleUtils, :DocTestSetup, :(using CosmoParticleUtils); recursive=true)
 
-links = InterLinks("Julia" => "https://docs.julialang.org/en/v1/")
+links = InterLinks(
+    "Julia" => "https://docs.julialang.org/en/v1/",
+    "StatsBase" => "https://juliastats.org/StatsBase.jl/stable/",
+)
 
 makedocs(;
     plugins=[links],

@@ -154,5 +154,15 @@ using Unitful
         @test center_of_velocity(pos3, mass3) == center_of_velocity(p3; velprop=:pos)
 
         @test center_of_velocity(pos3, pos3, mass3, 10) == center_of_velocity(p3, 10; velprop=:pos)
+
+        @test center_of_velocity(pos3, mass3) isa Vector{Float64}
+        @test center_of_velocity(pos3, pos3, mass3, 0.8) isa Vector{Float64}
+        @test center_of_velocity(pos3, 2.0) isa Vector{Float64}
+
+        # the default center is the origin
+        cov = center_of_velocity(pos3, pos3, mass3, 0.8)
+        @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=nothing) == cov
+        @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=zeros(3)) == cov
+        @test center_of_velocity(pos2 * u"m/s", mass2 * u"kg") isa Vector{<:Unitful.Velocity}
     end
 end
