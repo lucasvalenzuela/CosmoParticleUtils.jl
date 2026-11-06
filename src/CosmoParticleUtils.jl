@@ -24,7 +24,10 @@ This works for any dimensions of the position matrix (2D, 3D, etc.).
 
 # Keyword arguments
 - `rmax::Union{Number,Nothing}=nothing`
-- `sortalg=QuickSort`: sorting algorithm
+- `sortalg=nothing`: sorting algorithm passed to
+  [`usortperm`](@extref FastUnitfulOperations.usortperm) as `alg`, e.g.
+  [`QuickSort`](@extref Base.Sort.QuickSort); `nothing` uses the default of `usortperm`, which is
+  faster for large vectors
 - `sorted=false`: whether r² can be assumed to be sorted
 """
 function half_mass_radius(pos::AbstractMatrix{<:Number}, mass=nothing; kwargs...)
@@ -36,7 +39,7 @@ function half_mass_radius(
     r²::AbstractVector{<:Number},
     mass::AbstractVector{T};
     rmax::Union{Number,Nothing}=nothing,
-    sortalg=QuickSort,
+    sortalg=nothing,
     sorted=false,
 ) where {T<:Number}
     # check dimensions
@@ -54,7 +57,7 @@ function half_mass_radius(
     if sorted
         mass_sorted = mass
     else
-        ind = usortperm(r²; alg=sortalg)
+        ind = isnothing(sortalg) ? usortperm(r²) : usortperm(r²; alg=sortalg)
         mass_sorted = mass[ind]
     end
 
@@ -73,7 +76,7 @@ function half_mass_radius(
     r²::AbstractVector{<:Number},
     mass::Union{Number,Nothing,AbstractFillVector}=nothing;
     rmax::Union{Number,Nothing}=nothing,
-    sortalg=QuickSort, # not needed due to partialsort, but don't remove!
+    sortalg=nothing, # unused (partialsort), accepted so that all methods take the same keywords
     sorted=false,
 )
     if !isnothing(rmax)

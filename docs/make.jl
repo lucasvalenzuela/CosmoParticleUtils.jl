@@ -6,6 +6,7 @@ DocMeta.setdocmeta!(CosmoParticleUtils, :DocTestSetup, :(using CosmoParticleUtil
 
 links = InterLinks(
     "Julia" => "https://docs.julialang.org/en/v1/",
+    "FastUnitfulOperations" => "https://lucasvalenzuela.github.io/FastUnitfulOperations.jl/stable/",
     "StatsBase" => "https://juliastats.org/StatsBase.jl/stable/",
 )
 
