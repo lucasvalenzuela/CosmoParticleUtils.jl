@@ -5,6 +5,9 @@ using JET
 using Test
 
 using CosmoParticles
+using FillArrays
+using Random
+using Statistics
 using Unitful
 
 @testset "CosmoParticleUtils.jl" begin
@@ -74,6 +77,55 @@ using Unitful
         @test half_mass_radius(p2) == rhalf2
         @test half_mass_radius(p3) == rhalf3
         @test half_mass_radius(p2; r2prop=:r2, sortalg=MergeSort) == rhalf2
+
+        # interpolation at half the total mass between the middles of the particles' masses
+        function reference_half_mass_radius(r², mass)
+            ind = sortperm(r²)
+            r = sqrt.(r²[ind])
+            m = mass[ind]
+            c = cumsum(m) .- m ./ 2
+            half = sum(m) / 2
+            j = searchsortedlast(c, half)
+            j == 0 && return r[1]
+            j == length(c) && return r[end]
+            return r[j] + (half - c[j]) / (c[j + 1] - c[j]) * (r[j + 1] - r[j])
+        end
+
+        rng = Xoshiro(1)
+        for n in (1, 2, 9, 10, 1001)
+            r² = rand(rng, n)
+            m = rand(rng, n)
+            @test half_mass_radius(r², m) ≈ reference_half_mass_radius(r², m)
+            @test half_mass_radius(sort(r²), m[sortperm(r²)]; sorted=true) ≈ half_mass_radius(r², m)
+            @test half_mass_radius(r², fill(3.0, n)) ≈ median(sqrt.(r²))
+            @test half_mass_radius(r², nothing) ≈ median(sqrt.(r²))
+            @test half_mass_radius(sort(r²), nothing; sorted=true) ≈ median(sqrt.(r²))
+        end
+
+        @test half_mass_radius([1.0, 4.0], [1.0, 1.0]) ≈ 1.5
+        @test half_mass_radius([1.0, 4.0], [1.0, 1.5]) ≈ 1.6
+        @test half_mass_radius([1.0, 4.0], [1.0, 3.0]) ≈ 1.75
+        @test half_mass_radius([4.0], [1.0]) == 2.0
+        @test half_mass_radius([4.0], nothing) == 2.0
+        @test half_mass_radius([4.0, 1.0], [1.0, 0.0]) == 2.0
+        @test half_mass_radius([1.0, 4.0, 9.0], [1.0, 1.0, 1.0] * u"kg") ≈ 2.0
+        @test half_mass_radius(Float32[1, 4, 9], Float32[1, 1, 1]) isa Float32
+
+        r² = rand(rng, 100)
+        m = rand(rng, 100)
+        @test half_mass_radius(sort(r²), m[sortperm(r²)]; rmax=0.5, sorted=true) ≈
+              half_mass_radius(r², m; rmax=0.5)
+        @test half_mass_radius(r², m; rmax=0.5) ≈ reference_half_mass_radius(r²[r² .≤ 0.25], m[r² .≤ 0.25])
+
+        @test_throws "no particles within rmax" half_mass_radius([4.0, 9.0], [1.0, 1.0]; rmax=1)
+        @test_throws "no particles within rmax" half_mass_radius([4.0, 9.0], [1.0, 1.0]; rmax=1, sorted=true)
+        @test_throws "no particles within rmax" half_mass_radius([4.0, 9.0], nothing; rmax=1)
+        @test_throws "no particles given" half_mass_radius(Float64[], nothing)
+        @test_throws "no particles given" half_mass_radius(Float64[], Float64[])
+        @test_throws "the total mass must be positive and finite" half_mass_radius([1.0, 4.0], [0.0, 0.0])
+        @test_throws "the total mass must be positive and finite" half_mass_radius([1.0, 4.0], [1.0, NaN])
+        @test_throws DimensionMismatch half_mass_radius([1.0, 4.0], [1.0, 1.0, 1.0])
+        @test_throws DimensionMismatch half_mass_radius([1.0, 4.0], Fill(1.0, 3))
     end
 
     @testset "Center of Mass" begin

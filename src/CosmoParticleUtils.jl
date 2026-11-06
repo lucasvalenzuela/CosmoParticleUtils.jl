@@ -17,10 +17,11 @@ export half_mass_radius, center_of_mass_iterative, center_of_velocity, get_smoot
     half_mass_radius(pos::AbstractMatrix{<:Number}, mass::Union{AbstractVector{<:Number},Number,Nothing})
     half_mass_radius(r²::AbstractVector{<:Number}, mass::Union{AbstractVector{<:Number},Number,Nothing})
 
-Returns the half-mass radius of the particles within radius `rmax`, or of all particles if `rmax`
-is `nothing`.
+Returns the half-mass radius of the particles within radius `rmax` of the origin, or of all
+particles if `rmax` is `nothing`.
 
-This works for any dimensions of the position matrix (2D, 3D, etc.).
+This works for any dimensions of the position matrix (2D, 3D, etc.). Throws an error if there
+are no particles, or if the total mass is not positive and finite.
 
 # Keyword arguments
 - `rmax::Union{Number,Nothing}=nothing`
@@ -37,39 +38,69 @@ end
 
 function half_mass_radius(
     r²::AbstractVector{<:Number},
-    mass::AbstractVector{T};
+    mass::AbstractVector{<:Number};
     rmax::Union{Number,Nothing}=nothing,
     sortalg=nothing,
     sorted=false,
-) where {T<:Number}
-    # check dimensions
-    @assert length(mass) == length(r²)
+)
+    axes(r²) == axes(mass) ||
+        throw(DimensionMismatch("r² and mass must have the same indices, got $(axes(r²)) and $(axes(mass))"))
 
     if !isnothing(rmax)
-        mask = r² .≤ rmax^2
-        mass = mass[mask]
-        r² = r²[mask]
+        if sorted
+            lastind = searchsortedlast(r², rmax^2)
+            r² = @view r²[begin:lastind]
+            mass = @view mass[begin:lastind]
+        else
+            mask = r² .≤ rmax^2
+            r² = r²[mask]
+            mass = mass[mask]
+        end
     end
+    isempty(r²) && _throw_no_particles(rmax)
 
-    mass_half = 1 // 2 * sum(mass)
-
-    # mass sorted by distance to center
     if sorted
-        mass_sorted = mass
+        perm = eachindex(r²)
     else
-        ind = isnothing(sortalg) ? usortperm(r²) : usortperm(r²; alg=sortalg)
-        mass_sorted = mass[ind]
+        perm = isnothing(sortalg) ? usortperm(r²) : usortperm(r²; alg=sortalg)
     end
 
-    # traverse masses outwardly until half of the total mass is reached
-    mass_cumul = Float64(zero(T)) # set Float64 to avoid losing precision for Float32
-    i = 1
-    @inbounds while mass_cumul < mass_half
-        mass_cumul += mass_sorted[i]
-        i += 1
+    return _half_mass_radius_sorted(r², CosmoParticles.ustrip_lazy(mass), perm)
+end
+
+_throw_no_particles(::Nothing) = throw(ArgumentError("no particles given"))
+_throw_no_particles(rmax) = throw(ArgumentError("no particles within rmax = $rmax"))
+
+# `perm` lists the indices of `r²` and `m` in order of increasing radius. Only the mass ratios
+# matter, so `m` has no units; the masses are summed in at least Float64 precision.
+function _half_mass_radius_sorted(r², m, perm)
+    S = promote_type(eltype(m), Float64)
+    total = sum(S, m)
+    total > 0 && isfinite(total) ||
+        throw(ArgumentError("the total mass must be positive and finite, got $total"))
+    half = total / 2
+
+    # find the first particle whose middle cumulative mass exceeds half the total mass, and
+    # interpolate between it and the previous particle
+    cumul = zero(S) # mass of all particles before the current one
+    c_prev = zero(S)
+    j_prev = first(perm)
+    for j in perm
+        c = cumul + m[j] / 2
+        if c > half
+            r = sqrt(r²[j])
+            j == first(perm) && return r
+            r_prev = sqrt(r²[j_prev])
+            t = oftype(one(r), (half - c_prev) / (c - c_prev)) # dimensionless, in the precision of r
+            return r_prev + t * (r - r_prev)
+        end
+        cumul += m[j]
+        c_prev = c
+        j_prev = j
     end
 
-    return 1 // 2 * (sqrt(r²[ind[i - 1]]) + sqrt(r²[ind[i - 2]]))
+    # half the total mass is at the middle of the outermost particle
+    return sqrt(r²[j_prev])
 end
 
 function half_mass_radius(
@@ -79,6 +110,10 @@ function half_mass_radius(
     sortalg=nothing, # unused (partialsort), accepted so that all methods take the same keywords
     sorted=false,
 )
+    mass isa AbstractVector &&
+        axes(mass) != axes(r²) &&
+        throw(DimensionMismatch("r² and mass must have the same indices, got $(axes(r²)) and $(axes(mass))"))
+
     if !isnothing(rmax)
         if sorted
             lastind = searchsortedlast(r², rmax^2)
@@ -90,20 +125,20 @@ function half_mass_radius(
     end
 
     n = length(r²)
-    n_half = n ÷ 2
+    n > 0 || _throw_no_particles(rmax)
 
-    # radius sorted by distance to center
+    # median radius: the middle element for odd n, the mean of the two middle elements for even n
+    k = (n + 1) ÷ 2
     if sorted
-        r1, r2 = r²[n_half:(n_half + 1)]
+        r1 = r²[firstindex(r²) + k - 1]
+        r2 = r²[lastindex(r²) - k + 1]
+    elseif iseven(n)
+        r1, r2 = partialsort(r², k:(k + 1))
     else
-        r1, r2 = partialsort(r², n_half:(n_half + 1))
+        r1 = r2 = partialsort(r², k)
     end
 
-    if iseven(n)
-        return 1 // 2 * (sqrt(r1) + sqrt(r2))
-    else
-        return sqrt(r2)
-    end
+    return 1 // 2 * (sqrt(r1) + sqrt(r2))
 end
 
 function half_mass_radius(p::AbstractParticles; posprop=:pos, massprop=:mass, r2prop=nothing, kwargs...)
