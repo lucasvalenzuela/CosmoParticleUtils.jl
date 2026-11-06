@@ -108,7 +108,24 @@ using Unitful
 
         @test center_of_mass_iterative(pos2, mass2, 1) == center_of_mass_iterative(p2, 1)
         @test center_of_mass_iterative(pos3, mass3, 1) == center_of_mass_iterative(p3, 1)
+
+        # equal masses, stored as a Fill vector in Particles
+        pfill = Particles(:dm, :pos => pos3, :mass => 2.0)
+        com = center_of_mass_iterative(pos3, ones(length(mass3)), 1)
+        @test center_of_mass_iterative(pfill, 1) ≈ com
+        @test center_of_mass_iterative(pos3, 2.0, 1) ≈ com
+        @test center_of_mass_iterative(pos3, nothing, 1) ≈ com
+
+        @test_throws "no particles within r_start" center_of_mass_iterative(pos3 .+ 10, mass3, 1)
+        @test_throws "shrinking_factor must be between 0 and 1" center_of_mass_iterative(
+            pos3,
+            mass3,
+            1;
+            shrinking_factor=0,
+        )
+        @test center_of_mass_iterative(pos3, mass3, 1; limit_fraction=0) isa Vector{Float64}
     end
+
 
     @testset "Center of Velocity" begin
         @test isapprox.(center_of_velocity(pos2, ones(length(mass2))), 0; atol=1e-15) |> all

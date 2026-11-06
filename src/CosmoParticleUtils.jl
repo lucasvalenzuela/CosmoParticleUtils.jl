@@ -124,7 +124,7 @@ shrinks by `shrinking_factor` every iteration. The iteration is stopped when the
 contains fewer than `limit_number` and fewer than `limit_fraction` times the number of particles in the
 starting sphere, whichever is smaller. In addition, the iteration is stopped when the radius
 of the sphere drops below `limit_radius`. Note that the unit of `limit_radius` should be the
-same as that of `r_start`.
+same as that of `r_start`. Throws an error if the starting sphere contains no particles.
 
 The radius of the sphere in iteration step ``i`` is ``r_0 (1 - f_\mathrm{shrink})^i``.
 
@@ -143,6 +143,9 @@ function center_of_mass_iterative(
     limit_number::Integer=1000,
     limit_radius::Number=zero(R),
 ) where {T<:Number,R<:Number,S<:Real}
+    0 < shrinking_factor < 1 ||
+        throw(ArgumentError("shrinking_factor must be between 0 and 1, got $shrinking_factor"))
+
     r₀ = zeros(T, size(pos, 1))
     r²_max = r_start^2
     r²_limit = (limit_radius / (oneunit(S) - shrinking_factor))^2
@@ -151,9 +154,11 @@ function center_of_mass_iterative(
     r² = colnorm2(pos, r₀)
     mask = r² .≤ r²_max # this will be reused further down
     n = count(mask)
+    n > 0 || throw(ArgumentError("no particles within r_start = $r_start of the origin"))
 
-    # get number limit for when the algorithm should stop
-    nlimit = min(limit_number, ceil(Int, limit_fraction * n))
+    # get number limit for when the algorithm should stop; at least 1, so that the loop ends when
+    # the sphere is empty
+    nlimit = max(1, min(limit_number, ceil(Int, limit_fraction * n)))
     while n ≥ nlimit && r²_max ≥ r²_limit
         _mean_position!(r₀, pos, mass, mask)
         r²_max *= (oneunit(S) - shrinking_factor)^2
@@ -185,7 +190,7 @@ function _mean_position!(
     _::Union{Number,Nothing,AbstractFillVector},
     mask,
 )
-    @views mean!(r₀, pos[:, mask]; dims=2)
+    @views mean!(r₀, pos[:, mask])
 end
 
 
