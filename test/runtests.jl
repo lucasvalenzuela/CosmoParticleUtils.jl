@@ -78,6 +78,11 @@ using Unitful
         @test half_mass_radius(p3) == rhalf3
         @test half_mass_radius(p2; r2prop=:r2, sortalg=MergeSort) == rhalf2
 
+        # equal masses, stored as a Fill vector in Particles
+        pfill = Particles(:dm, :pos => pos3, :mass => 2.0)
+        @test half_mass_radius(pfill) == half_mass_radius(pos3, nothing)
+        @test half_mass_radius(pfill) == half_mass_radius(pos3, 2.0)
+
         # interpolation at half the total mass between the middles of the particles' masses
         function reference_half_mass_radius(r², mass)
             ind = sortperm(r²)
@@ -178,7 +183,6 @@ using Unitful
         @test center_of_mass_iterative(pos3, mass3, 1; limit_fraction=0) isa Vector{Float64}
     end
 
-
     @testset "Center of Velocity" begin
         @test isapprox.(center_of_velocity(pos2, ones(length(mass2))), 0; atol=1e-15) |> all
         @test isapprox.(center_of_velocity(pos3, ones(length(mass3))), 0; atol=1e-15) |> all
@@ -215,6 +219,11 @@ using Unitful
         cov = center_of_velocity(pos3, pos3, mass3, 0.8)
         @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=nothing) == cov
         @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=zeros(3)) == cov
+
+        # equal masses, stored as a Fill vector in Particles
+        pfill = Particles(:dm, :pos => pos3, :vel => pos3, :mass => 2.0)
+        @test center_of_velocity(pfill) == center_of_velocity(pos3, nothing)
+        @test center_of_velocity(pfill, 0.8) == center_of_velocity(pos3, pos3, nothing, 0.8)
         @test center_of_velocity(pos2 * u"m/s", mass2 * u"kg") isa Vector{<:Unitful.Velocity}
     end
 
