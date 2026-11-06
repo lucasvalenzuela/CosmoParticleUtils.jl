@@ -260,36 +260,32 @@ end
 
 
 """
-    get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=zeros(eltype(pos), size(pos, 1)))
-    get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, periodic=false, boxlengths=zeros(eltype(pos), size(pos, 1)))
+    get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=nothing)
+    get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, periodic=false, boxlengths=nothing)
 
-Gets the nth particle neighbor distances for the passed positions for each particle.
+Returns the distance of each particle to its `k`th-nearest neighbor, not counting the particle
+itself.
 
 The distances are determined with [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl)
 using a `KDTree` for non-periodic and `BallTree` for periodic nearest neighbors.
-The nth-nearest particle does not count the respective particle itself.
 
 # Keyword Arguments
 - `periodic=false`: whether the periodicity of the simulation box should be taken into account - this is only
   necessary if the entire box is plotted and is significantly more computational intensive than non-periodic
   smoothing
-- `boxlengths::AbstractVector`: vector of the box length in each direction; only needs to be set when `periodic`
-  is set to `true`
+- `boxlengths=nothing`: vector of the box length in each direction; required when `periodic` is
+  `true`
 
 # Examples
-julia```
+```julia
 pos = rand(3, 100)
 k = 16
 get_smoothing_lengths(pos, k)
 ```
 """
-function get_smoothing_lengths(
-    pos::AbstractMatrix,
-    k::Integer;
-    periodic=false,
-    boxlengths=zeros(eltype(pos), size(pos, 1)),
-)
+function get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=nothing)
     if periodic
+        isnothing(boxlengths) && throw(ArgumentError("boxlengths must be given when periodic is true"))
         tree = BallTree(pos, PeriodicEuclidean(boxlengths))
     else
         tree = KDTree(pos, Euclidean())

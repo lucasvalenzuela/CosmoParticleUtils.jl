@@ -165,4 +165,36 @@ using Unitful
         @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=zeros(3)) == cov
         @test center_of_velocity(pos2 * u"m/s", mass2 * u"kg") isa Vector{<:Unitful.Velocity}
     end
+
+    @testset "Smoothing lengths" begin
+        pos = [0.1 0.3 0.6 0.95 0.5; 0.2 0.2 0.7 0.9 0.15]
+        boxlengths = [1.0, 1.0]
+
+        # distance to the kth-nearest other particle by comparing all pairs
+        function kth_distance(pos, k, dist)
+            map(axes(pos, 2)) do i
+                d = sort([dist(pos[:, i], pos[:, j]) for j in axes(pos, 2) if j != i])
+                d[k]
+            end
+        end
+        euclid(a, b) = sqrt(sum(abs2, a - b))
+        periodic(a, b) = sqrt(sum(abs2, min.(abs.(a - b), boxlengths .- abs.(a - b))))
+
+        for k in 1:3
+            @test get_smoothing_lengths(pos, k) ≈ kth_distance(pos, k, euclid)
+            @test get_smoothing_lengths(pos, k; periodic=true, boxlengths) ≈ kth_distance(pos, k, periodic)
+        end
+        @test get_smoothing_lengths(pos, 1; periodic=true, boxlengths) != get_smoothing_lengths(pos, 1)
+
+        p = Particles(:gas, :pos => pos)
+        @test get_smoothing_lengths(p, 2) == get_smoothing_lengths(pos, 2)
+        @test get_smoothing_lengths(p, 2; periodic=true, boxlengths) ==
+              get_smoothing_lengths(pos, 2; periodic=true, boxlengths)
+
+        @test_throws "boxlengths must be given when periodic is true" get_smoothing_lengths(
+            pos,
+            2;
+            periodic=true,
+        )
+    end
 end
