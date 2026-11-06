@@ -1,7 +1,6 @@
 module CosmoParticleUtils
 
 using CosmoParticles
-using Distances
 using FastUnitfulOperations
 using FillArrays
 using FillArrays: AbstractFillVector
@@ -298,21 +297,25 @@ end
 
 
 """
-    get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=nothing)
-    get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, periodic=false, boxlengths=nothing)
+    get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=nothing, boxcorners=nothing)
+    get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...)
 
 Returns the distance of each particle to its `k`th-nearest neighbor, not counting the particle
 itself.
 
 The distances are determined with [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl)
-using a `KDTree` for non-periodic and `BallTree` for periodic nearest neighbors.
+using a `KDTree`, which is wrapped in a `PeriodicTree` for periodic boundaries.
+
+For periodic boundaries, either `boxlengths` or `boxcorners` has to be given. With `boxlengths`,
+the positions are wrapped into the box from zero to `boxlengths`, which needs a copy of the
+positions. With `boxcorners`, no copy is made, and all positions have to lie within the box. The
+box values are ignored if `periodic` is `false`.
 
 # Keyword Arguments
-- `periodic=false`: whether the periodicity of the simulation box should be taken into account - this is only
-  necessary if the entire box is plotted and is significantly more computational intensive than non-periodic
-  smoothing
-- `boxlengths=nothing`: vector of the box length in each direction; required when `periodic` is
-  `true`
+- `periodic=false`: whether to take the periodic boundaries of the simulation box into account
+- `boxlengths=nothing`: vector of the box length in each direction
+- `boxcorners=nothing`: tuple `(lowerleft, upperright)` of the vectors of the lower and upper box bounds
+  in each direction
 
 # Examples
 ```julia
@@ -321,15 +324,33 @@ k = 16
 get_smoothing_lengths(pos, k)
 ```
 """
-function get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=nothing)
+function get_smoothing_lengths(
+    pos::AbstractMatrix,
+    k::Integer;
+    periodic=false,
+    boxlengths=nothing,
+    boxcorners=nothing,
+)
     if periodic
-        isnothing(boxlengths) && throw(ArgumentError("boxlengths must be given when periodic is true"))
-        tree = BallTree(pos, PeriodicEuclidean(boxlengths))
+        if !isnothing(boxlengths)
+            isnothing(boxcorners) || throw(ArgumentError("give either boxlengths or boxcorners, not both"))
+            # periodic distances do not change when positions are shifted by box lengths
+            pos = mod.(pos, boxlengths)
+            boxmin, boxmax = zero.(boxlengths), boxlengths
+        elseif !isnothing(boxcorners)
+            length(boxcorners) == 2 || throw(
+                ArgumentError("boxcorners must contain the lower and upper box bounds, got $boxcorners"),
+            )
+            boxmin, boxmax = boxcorners
+        else
+            throw(ArgumentError("boxlengths or boxcorners must be given when periodic is true"))
+        end
+        tree = PeriodicTree(KDTree(pos), boxmin, boxmax)
     else
-        tree = KDTree(pos, Euclidean())
+        tree = KDTree(pos)
     end
 
-    idxs, dists = knn(tree, pos, k + 1)
+    _, dists = knn(tree, pos, k + 1)
 
     return maximum.(dists)
 end

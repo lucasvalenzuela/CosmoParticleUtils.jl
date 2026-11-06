@@ -5,7 +5,6 @@ version = "0.2.0"
 
 [deps]
 CosmoParticles = "b2fead7a-f6ae-4e5b-9c3d-9b85ace3042d"
-Distances = "b4f34e82-e78d-54a5-968a-f98e89d6e8f7"
 FastUnitfulOperations = "b031420d-871e-4e9c-8878-33bec386257e"
 FillArrays = "1a297f60-69ca-5386-bcde-b61e274b549b"
 NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
@@ -14,10 +13,9 @@ StatsBase = "2913bbd2-ae8a-5f71-8c99-4fb6c76f3a91"
 
 [compat]
 CosmoParticles = "0.4"
-Distances = "0.10.12"
 FastUnitfulOperations = "0.2"
 FillArrays = "1.18"
-NearestNeighbors = "0.4.21"
+NearestNeighbors = "0.4.23"
 Statistics = "1"
 StatsBase = "0.34"
 julia = "1.12"

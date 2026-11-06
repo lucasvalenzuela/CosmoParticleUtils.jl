@@ -239,7 +239,7 @@ using Unitful
             end
         end
         euclid(a, b) = sqrt(sum(abs2, a - b))
-        periodic(a, b) = sqrt(sum(abs2, min.(abs.(a - b), boxlengths .- abs.(a - b))))
+        periodic(a, b) = (d=mod.(a - b, boxlengths); sqrt(sum(abs2, min.(d, boxlengths .- d))))
 
         for k in 1:3
             @test get_smoothing_lengths(pos, k) ≈ kth_distance(pos, k, euclid)
@@ -247,15 +247,44 @@ using Unitful
         end
         @test get_smoothing_lengths(pos, 1; periodic=true, boxlengths) != get_smoothing_lengths(pos, 1)
 
+        # positions outside the box are wrapped into it when only boxlengths are given
+        shifted = pos .+ [3.0, -2.0] .* (axes(pos, 2)' .% 2)
+        @test get_smoothing_lengths(shifted, 2; periodic=true, boxlengths) ≈ kth_distance(pos, 2, periodic)
+
+        # box bounds are used without wrapping
+        @test get_smoothing_lengths(pos, 2; periodic=true, boxcorners=([0.0, 0.0], [1.0, 1.0])) ≈
+              kth_distance(pos, 2, periodic)
+        @test get_smoothing_lengths(pos .- 0.5, 2; periodic=true, boxcorners=([-0.5, -0.5], [0.5, 0.5])) ≈
+              kth_distance(pos, 2, periodic)
+        @test_throws "outside the periodic box bounds" get_smoothing_lengths(
+            shifted,
+            2;
+            periodic=true,
+            boxcorners=([0.0, 0.0], [1.0, 1.0]),
+        )
+
+        @test get_smoothing_lengths(pos * u"m", 2; periodic=true, boxlengths=boxlengths * u"m") ≈
+              kth_distance(pos, 2, periodic) * u"m"
+
         p = Particles(:gas, :pos => pos)
         @test get_smoothing_lengths(p, 2) == get_smoothing_lengths(pos, 2)
         @test get_smoothing_lengths(p, 2; periodic=true, boxlengths) ==
               get_smoothing_lengths(pos, 2; periodic=true, boxlengths)
 
-        @test_throws "boxlengths must be given when periodic is true" get_smoothing_lengths(
+        @test_throws "boxlengths or boxcorners must be given" get_smoothing_lengths(pos, 2; periodic=true)
+        @test_throws "boxcorners must contain the lower and upper box bounds" get_smoothing_lengths(
             pos,
             2;
             periodic=true,
+            boxcorners=([0.0, 0.0],),
         )
+        @test_throws "give either boxlengths or boxcorners" get_smoothing_lengths(
+            pos,
+            2;
+            periodic=true,
+            boxlengths,
+            boxcorners=([0.0, 0.0], [1.0, 1.0]),
+        )
+        @test get_smoothing_lengths(pos, 2; boxlengths) == get_smoothing_lengths(pos, 2)
     end
 end
