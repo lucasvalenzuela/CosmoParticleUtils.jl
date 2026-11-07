@@ -42,6 +42,30 @@ end
         @test check_no_self_qualified_accesses(CosmoParticleUtils) === nothing
         if JET.JET_AVAILABLE
             JET.test_package(CosmoParticleUtils; target_modules=(CosmoParticleUtils,))
+
+            # no calls in the package are resolved at run time
+            pos = rand(3, 100)
+            vel = rand(3, 100)
+            mass = rand(100)
+            r² = rand(100)
+            for (x, v, m, r) in (
+                (pos, vel, mass, 0.5),
+                (Float32.(pos), Float32.(vel), Float32.(mass), 0.5f0),
+                (pos * u"m", vel * u"m/s", mass * u"kg", 0.5u"m"),
+            )
+                JET.@test_opt target_modules = (CosmoParticleUtils,) half_mass_radius(x, m)
+                JET.@test_opt target_modules = (CosmoParticleUtils,) half_mass_radius(x, nothing; rmax=r)
+                JET.@test_opt target_modules = (CosmoParticleUtils,) center_of_mass_iterative_info(x, m, r)
+                JET.@test_opt target_modules = (CosmoParticleUtils,) center_of_velocity(x, v, m; rmax=r)
+                JET.@test_opt target_modules = (CosmoParticleUtils,) center_of_velocity(v, m)
+            end
+            JET.@test_opt target_modules = (CosmoParticleUtils,) half_mass_radius(r², mass; sortalg=MergeSort)
+            JET.@test_opt target_modules = (CosmoParticleUtils,) half_mass_radius(sort(r²), mass; sorted=true)
+            JET.@test_opt target_modules = (CosmoParticleUtils,) half_mass_radius(
+                r²,
+                Fill(1.0, 100);
+                rmax=0.5,
+            )
         end
     end
 
