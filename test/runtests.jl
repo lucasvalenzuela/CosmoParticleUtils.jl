@@ -260,6 +260,18 @@ end
               half_mass_radius(r², m)
         @test half_mass_radius(view(hcat(pos3, pos3), :, axes(pos3, 2)), mass3) ≈ rhalf3
         @test_throws "offset arrays are not supported" half_mass_radius(OffsetArray(pos3, 0, -5), mass3)
+
+        # type stability
+        @inferred half_mass_radius(pos3, mass3)
+        @inferred half_mass_radius(pos3)
+        @inferred half_mass_radius(pos3, Fill(2.0, size(pos3, 2)))
+        @inferred half_mass_radius(pos3, mass3; r0=SVector(0.1, 0.2, 0.3))
+        @inferred half_mass_radius(r², m; rmax=0.5)
+        @inferred half_mass_radius(r², m; sortalg=MergeSort)
+        @inferred half_mass_radius(sort(r²), m; sorted=true)
+        @inferred half_mass_radius(r²; rmax=0.5)
+        @inferred half_mass_radius(Float32.(r²), Float32.(m))
+        @inferred half_mass_radius(r² * u"m^2", m * u"kg")
     end
 
     @testset "Center of Mass" begin
@@ -353,6 +365,13 @@ end
             mass3,
             1,
         )
+
+        # type stability
+        @inferred center_of_mass_iterative(pos3, mass3, 1.0)
+        @inferred center_of_mass_iterative(pos3, nothing, 1.0)
+        @inferred center_of_mass_iterative(Float32.(pos3), Float32.(mass3), 1.0f0)
+        @inferred center_of_mass_iterative(pos3 * u"m", mass3 * u"kg", 1.0u"m")
+        @inferred center_of_mass_iterative_info(pos3, mass3, 1.0)
     end
 
     @testset "Center of Velocity" begin
@@ -405,6 +424,12 @@ end
         @test_throws "offset arrays are not supported" center_of_velocity(OffsetArray(pos3, 0, -5), mass3)
         @test center_of_velocity(pos2 * u"m/s", mass2 * u"kg") isa Vector{<:Unitful.Velocity}
         @test center_of_velocity(pos3 * u"m/s", mass3 * u"kg") ≈ center_of_velocity(pos3, mass3) * u"m/s"
+
+        # type stability
+        @inferred center_of_velocity(pos3, pos3, mass3, 0.8)
+        @inferred center_of_velocity(pos3, mass3)
+        @inferred center_of_velocity(pos3, nothing)
+        @inferred center_of_velocity(pos3 * u"m", pos3 * u"m/s", mass3 * u"kg", 0.8u"m")
     end
 
     @testset "Smoothing lengths" begin
@@ -480,5 +505,11 @@ end
         @test smoothing_lengths(round.(Int, 10 .* pos), 1) isa Vector{Float64}
         @test_throws "k must be smaller than the number of particles" smoothing_lengths(pos, 5)
         @test_throws "offset arrays are not supported" smoothing_lengths(OffsetArray(pos, 0, -2), 2)
+
+        # type stability
+        @inferred smoothing_lengths(pos, 2)
+        @inferred smoothing_lengths(Float32.(pos), 2)
+        @inferred smoothing_lengths(pos, 2; periodic=true, boxlengths)
+        @inferred smoothing_lengths(pos, 2; periodic=true, boxcorners=([0.0, 0.0], [1.0, 1.0]))
     end
 end
