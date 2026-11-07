@@ -198,6 +198,9 @@ using Unitful
         @test center_of_mass_iterative(p3, 1; r0=zeros(3)) == com
         @test c == [1.0, 2.0, 3.0]
         @test_throws DimensionMismatch center_of_mass_iterative(pos3, mass3, 1; r0=[0.0, 0.0])
+
+        # integer positions give a floating-point center
+        @test center_of_mass_iterative(round.(Int, 10 .* pos3), mass3, 10) isa Vector{Float64}
     end
 
     @testset "Center of Velocity" begin

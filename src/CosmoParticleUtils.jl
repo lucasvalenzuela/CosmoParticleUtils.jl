@@ -167,6 +167,7 @@ of the sphere drops below `limit_radius`. Note that the unit of `limit_radius` s
 same as that of `r_start`. Throws an error if the starting sphere contains no particles.
 
 The radius of the sphere in iteration step ``i`` is ``r_\mathrm{start} (1 - f_\mathrm{shrink})^i``.
+The center is returned as a vector of floating-point numbers.
 
 # Keyword arguments
 - `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center of the starting sphere; `nothing`
@@ -189,8 +190,12 @@ function center_of_mass_iterative(
     0 < shrinking_factor < 1 ||
         throw(ArgumentError("shrinking_factor must be between 0 and 1, got $shrinking_factor"))
 
+    # colnorm2 converts the center to the element type of the positions; float returns float
+    # arrays without copying
+    pos = float(pos)
+
     # the center is updated in place, so it is a new vector even if r0 is given
-    r₀ = zeros(T, size(pos, 1))
+    r₀ = zeros(float(T), size(pos, 1))
     if !isnothing(r0)
         length(r0) == length(r₀) ||
             throw(DimensionMismatch("r0 must have $(length(r₀)) elements, got $(length(r0))"))
