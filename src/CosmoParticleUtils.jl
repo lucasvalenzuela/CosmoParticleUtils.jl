@@ -545,29 +545,33 @@ end
 
 
 """
-    center_of_velocity(vel::AbstractMatrix{<:Number}, mass; kwargs...)
-    center_of_velocity(pos::AbstractMatrix{<:Number}, vel::AbstractMatrix{<:Number}, mass, radius::Number; kwargs...)
-    center_of_velocity(p::AbstractParticles, radius::Number=Inf; posprop=:pos, velprop=:vel, massprop=:mass, kwargs...)
+    center_of_velocity(vel::AbstractMatrix{<:Number}, mass; p=0.9)
+    center_of_velocity(pos::AbstractMatrix{<:Number}, vel::AbstractMatrix{<:Number}, mass; kwargs...)
+    center_of_velocity(particles::AbstractParticles; posprop=:pos, velprop=:vel, massprop=:mass, kwargs...)
 
 Returns the [mass-weighted mean](@extref StatsBase Statistics.mean) velocity vector of the
-particles within `radius` around `r0`, or of all particles if no positions or an infinite
-`radius` are given.
+particles within radius `rmax` around `r0`, or of all particles if `rmax` is `nothing`.
 
 Only the particles whose velocities deviate least from the
 [`median`](@extref Statistics.median) velocity are included: those for which the absolute
 velocity relative to the median velocity is at most the `p`th
-[`quantile`](@extref Statistics.quantile) (any value between 0 and 1) of these magnitudes. The
-median and the quantile are not weighted.
+[`quantile`](@extref Statistics.quantile) of these magnitudes. The median and the quantile are
+not weighted, so `p` is a fraction of the particles and not of the mass: a single massive particle
+with a deviating velocity, such as a low-resolution particle in a zoom simulation, cannot make up
+the excluded fraction by itself, and particles of substructures with deviating velocities are
+excluded as well.
 
 The particles are given by their velocities `vel` and positions `pos`, ``d × N`` matrices for any
 dimension ``d``, or as [`AbstractParticles`](@extref CosmoParticles.AbstractParticles) with the
-properties `posprop`, `velprop` and `massprop`. The masses are a vector, or a number, a
-[`Fill`](@extref FillArrays.Fill) vector or `nothing` for equal masses.
+properties `posprop`, `velprop` and `massprop`. The positions are only needed if `rmax` is given.
+The masses are a vector, or a number, a [`Fill`](@extref FillArrays.Fill) vector or `nothing` for
+equal masses. Throws an error if there are no particles.
 
 # Keyword arguments
-- `p::Real=0.9`
+- `rmax::Union{Number,Nothing}=nothing`: radius within which the particles are considered
 - `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center of the sphere; `nothing` means it
-  uses the origin
+  uses the origin. Only used with `rmax`.
+- `p::Real=0.9`: fraction of the particles that are included, between 0 and 1
 
 # Examples
 ```jldoctest
@@ -589,30 +593,60 @@ julia> center_of_velocity(vel, mass; p=1.0)
 
 julia> pos = [0.5 1.0 -1.0 0.0 8.0; 0.0 0.5 0.0 -1.0 0.0];
 
-julia> center_of_velocity(pos, vel, [2.0, 1.0, 1.0, 1.0, 1.0], 2.0)
+julia> center_of_velocity(pos, vel, [2.0, 1.0, 1.0, 1.0, 1.0]; rmax=2.0)
 2-element Vector{Float64}:
  1.8
  0.0
 ```
 """
+function center_of_velocity(vel::AbstractMatrix{<:Number}, mass; p::Real=0.9)
+    _check_mass_axes(vel, mass)
+    size(vel, 2) > 0 || _throw_no_particles(nothing)
+    return _center_of_velocity(vel, mass, (:), p)
+end
+
 function center_of_velocity(
     pos::AbstractMatrix{<:Number},
     vel::AbstractMatrix{<:Number},
-    mass,
-    radius::Number;
-    p::Real=0.9,
+    mass;
+    rmax::Union{Number,Nothing}=nothing,
     r0::Union{AbstractVector{<:Number},Nothing}=nothing,
+    p::Real=0.9,
 )
+    axes(pos, 2) == axes(vel, 2) || throw(
+        DimensionMismatch(
+            "pos and vel must have the same particle indices, got $(axes(pos, 2)) and $(axes(vel, 2))",
+        ),
+    )
+    isnothing(rmax) && return center_of_velocity(vel, mass; p)
+
+    _check_mass_axes(vel, mass)
     r² = isnothing(r0) ? colnorm2(pos) : colnorm2(pos, r0)
-    mask = r² .≤ radius^2
-    vel_mask = vel[:, mask]
-
-    _center_of_velocity(vel_mask, mass, mask, p)
+    mask = r² .≤ rmax^2
+    any(mask) || _throw_no_particles(rmax)
+    return _center_of_velocity(vel[:, mask], mass, mask, p)
 end
 
-function center_of_velocity(vel::AbstractMatrix{<:Number}, mass; p::Real=0.9)
-    _center_of_velocity(vel, mass, (:), p)
+function center_of_velocity(
+    particles::AbstractParticles;
+    rmax::Union{Number,Nothing}=nothing,
+    r0::Union{AbstractVector{<:Number},Nothing}=nothing,
+    p::Real=0.9,
+    posprop=:pos,
+    velprop=:vel,
+    massprop=:mass,
+)
+    isnothing(rmax) && return center_of_velocity(particles[velprop], particles[massprop]; p)
+    return center_of_velocity(particles[posprop], particles[velprop], particles[massprop]; rmax, r0, p)
 end
+
+_check_mass_axes(vel, mass::AbstractVector) =
+    axes(vel, 2) == axes(mass, 1) || throw(
+        DimensionMismatch(
+            "vel and mass must have the same particle indices, got $(axes(vel, 2)) and $(axes(mass, 1))",
+        ),
+    )
+_check_mass_axes(_, ::Union{Number,Nothing}) = true
 
 function _center_of_velocity(vel_mask, mass, mask, p)
     v² = colnorm2(vel_mask, dropdims(median(vel_mask; dims=2); dims=2))
@@ -620,21 +654,6 @@ function _center_of_velocity(vel_mask, mass, mask, p)
     mask2 = v² .≤ v²_max
 
     return _mean_velocity(vel_mask, mass, mask, mask2)
-end
-
-function center_of_velocity(
-    p::AbstractParticles,
-    radius::Number=Inf;
-    posprop=:pos,
-    velprop=:vel,
-    massprop=:mass,
-    kwargs...,
-)
-    if isinf(radius)
-        center_of_velocity(p[velprop], p[massprop]; kwargs...)
-    else
-        center_of_velocity(p[posprop], p[velprop], p[massprop], radius; kwargs...)
-    end
 end
 
 function _mean_velocity(vel_mask::AbstractMatrix, mass::AbstractVector, mask, mask2)

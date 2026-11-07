@@ -377,8 +377,8 @@ end
     @testset "Center of Velocity" begin
         @test isapprox.(center_of_velocity(pos2, ones(length(mass2))), 0; atol=1e-15) |> all
         @test isapprox.(center_of_velocity(pos3, ones(length(mass3))), 0; atol=1e-15) |> all
-        @test isapprox.(center_of_velocity(pos2, pos2, ones(length(mass2)), 0.8), 0; atol=1e-15) |> all
-        @test isapprox.(center_of_velocity(pos3, pos3, ones(length(mass3)), 0.8), 0; atol=1e-15) |> all
+        @test isapprox.(center_of_velocity(pos2, pos2, ones(length(mass2)); rmax=0.8), 0; atol=1e-15) |> all
+        @test isapprox.(center_of_velocity(pos3, pos3, ones(length(mass3)); rmax=0.8), 0; atol=1e-15) |> all
 
         @test isapprox.(
             center_of_velocity(pos2 * u"m/s", ones(length(mass2)) * u"kg"),
@@ -386,50 +386,84 @@ end
             atol=1e-15u"m/s",
         ) |> all
         @test isapprox.(
-            center_of_velocity(pos2 * u"m", pos2 * u"m/s", ones(length(mass2)) * u"kg", 0.8u"m"),
+            center_of_velocity(pos2 * u"m", pos2 * u"m/s", ones(length(mass2)) * u"kg"; rmax=0.8u"m"),
             0u"m/s";
             atol=1e-15u"m/s",
         ) |> all
 
-        @test all(center_of_velocity(pos2, pos2, ones(length(mass2)), 0.8; r0=fill(0.1, 2)) .< 0.3)
-        @test all(center_of_velocity(pos3, pos3, ones(length(mass3)), 0.8; r0=fill(0.1, 3)) .< 0.3)
+        @test all(center_of_velocity(pos2, pos2, ones(length(mass2)); rmax=0.8, r0=fill(0.1, 2)) .< 0.3)
+        @test all(center_of_velocity(pos3, pos3, ones(length(mass3)); rmax=0.8, r0=fill(0.1, 3)) .< 0.3)
 
-        @test all(center_of_velocity(pos2, pos2, ones(length(mass2)), 0.8; p=0.5) .< 0.3)
-        @test all(center_of_velocity(pos3, pos3, ones(length(mass3)), 0.8; p=0.5) .< 0.3)
+        @test all(center_of_velocity(pos2, pos2, ones(length(mass2)); rmax=0.8, p=0.5) .< 0.3)
+        @test all(center_of_velocity(pos3, pos3, ones(length(mass3)); rmax=0.8, p=0.5) .< 0.3)
 
         @test center_of_velocity(pos2, mass2) == center_of_velocity(p2; velprop=:pos)
         @test center_of_velocity(pos3, mass3) == center_of_velocity(p3; velprop=:pos)
 
-        @test center_of_velocity(pos3, pos3, mass3, 10) == center_of_velocity(p3, 10; velprop=:pos)
+        @test center_of_velocity(pos3, pos3, mass3; rmax=10) == center_of_velocity(p3; rmax=10, velprop=:pos)
 
         @test center_of_velocity(pos3, mass3) isa Vector{Float64}
-        @test center_of_velocity(pos3, pos3, mass3, 0.8) isa Vector{Float64}
+        @test center_of_velocity(pos3, pos3, mass3; rmax=0.8) isa Vector{Float64}
         @test center_of_velocity(pos3, 2.0) isa Vector{Float64}
 
         # the default center is the origin
-        cov = center_of_velocity(pos3, pos3, mass3, 0.8)
-        @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=nothing) == cov
-        @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=zeros(3)) == cov
-        @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=SVector(0.0, 0.0, 0.0)) == cov
+        cov = center_of_velocity(pos3, pos3, mass3; rmax=0.8)
+        @test center_of_velocity(pos3, pos3, mass3; rmax=0.8, r0=nothing) == cov
+        @test center_of_velocity(pos3, pos3, mass3; rmax=0.8, r0=zeros(3)) == cov
+        @test center_of_velocity(pos3, pos3, mass3; rmax=0.8, r0=SVector(0.0, 0.0, 0.0)) == cov
 
         # equal masses, stored as a Fill vector in Particles
         pfill = Particles(:dm, :pos => pos3, :vel => pos3, :mass => 2.0)
         @test center_of_velocity(pfill) == center_of_velocity(pos3, nothing)
-        @test center_of_velocity(pfill, 0.8) == center_of_velocity(pos3, pos3, nothing, 0.8)
+        @test center_of_velocity(pfill; rmax=0.8) == center_of_velocity(pos3, pos3, nothing; rmax=0.8)
 
         vpos3 = view(hcat(pos3, pos3), :, axes(pos3, 2))
         vmass3 = view(vcat(mass3, mass3), axes(mass3, 1))
         @test center_of_velocity(vpos3, vmass3) ≈ center_of_velocity(pos3, mass3)
-        @test center_of_velocity(vpos3, vpos3, vmass3, 0.8) ≈ center_of_velocity(pos3, pos3, mass3, 0.8)
-        @test_throws "offset arrays are not supported" center_of_velocity(OffsetArray(pos3, 0, -5), mass3)
+        @test center_of_velocity(vpos3, vpos3, vmass3; rmax=0.8) ≈
+              center_of_velocity(pos3, pos3, mass3; rmax=0.8)
+        @test_throws "offset arrays are not supported" center_of_velocity(
+            OffsetArray(pos3, 0, -5),
+            OffsetArray(mass3, -5),
+        )
         @test center_of_velocity(pos2 * u"m/s", mass2 * u"kg") isa Vector{<:Unitful.Velocity}
         @test center_of_velocity(pos3 * u"m/s", mass3 * u"kg") ≈ center_of_velocity(pos3, mass3) * u"m/s"
 
+        # rmax=nothing uses all particles, and r0 only with rmax
+        @test center_of_velocity(pos3, pos3, mass3) == center_of_velocity(pos3, mass3)
+        @test center_of_velocity(pos3, pos3, mass3; r0=fill(0.1, 3)) == center_of_velocity(pos3, mass3)
+        @test center_of_velocity(pos3, pos3, mass3; rmax=Inf) == center_of_velocity(pos3, mass3)
+        pvel = Particles(:dm, :vel => pos3, :mass => mass3) # no positions
+        @test center_of_velocity(pvel) == center_of_velocity(pos3, mass3)
+        @test center_of_velocity(p3; r0=fill(0.1, 3), velprop=:pos) == center_of_velocity(pos3, mass3)
+
+        @test_throws "no particles within rmax = 0.5" center_of_velocity(pos3 .+ 5, pos3, mass3; rmax=0.5)
+        @test_throws "no particles given" center_of_velocity(zeros(3, 0), Float64[])
+        @test_throws "no particles given" center_of_velocity(zeros(3, 0), zeros(3, 0), nothing)
+        @test_throws "pos and vel must have the same particle indices" center_of_velocity(
+            pos3,
+            pos3[:, 2:end],
+            nothing;
+            rmax=0.8,
+        )
+        @test_throws "vel and mass must have the same particle indices" center_of_velocity(pos3, mass3[2:end])
+        @test_throws "vel and mass must have the same particle indices" center_of_velocity(
+            pos3,
+            pos3,
+            Fill(1.0, 3);
+            rmax=0.8,
+        )
+        @test_throws "vel and mass must have the same particle indices" center_of_velocity(
+            pos3,
+            pos3,
+            mass3[2:end],
+        )
+
         # type stability
-        @inferred center_of_velocity(pos3, pos3, mass3, 0.8)
+        @inferred center_of_velocity(pos3, pos3, mass3; rmax=0.8)
         @inferred center_of_velocity(pos3, mass3)
         @inferred center_of_velocity(pos3, nothing)
-        @inferred center_of_velocity(pos3 * u"m", pos3 * u"m/s", mass3 * u"kg", 0.8u"m")
+        @inferred center_of_velocity(pos3 * u"m", pos3 * u"m/s", mass3 * u"kg"; rmax=0.8u"m")
     end
 
     @testset "Smoothing lengths" begin
