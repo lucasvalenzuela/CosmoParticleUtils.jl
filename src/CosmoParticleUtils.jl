@@ -24,7 +24,8 @@ The particles are given by their positions `pos`, a ``d × N`` matrix for any di
 their squared radii `r²`, or as [`AbstractParticles`](@extref CosmoParticles.AbstractParticles)
 with the properties `posprop` and `massprop`, or `r2prop` for squared radii. The masses are a
 vector, or a number, a [`Fill`](@extref FillArrays.Fill) vector or `nothing` for equal masses.
-Throws an error if there are no particles, or if the total mass is not positive and finite.
+Throws an error if there are no particles, if a radius is `NaN`, or if the total mass is not
+positive and finite.
 
 # Keyword arguments
 - `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center from which the radii are measured;
@@ -84,6 +85,7 @@ function half_mass_radius(
 )
     axes(r²) == axes(mass) ||
         throw(DimensionMismatch("r² and mass must have the same indices, got $(axes(r²)) and $(axes(mass))"))
+    _check_no_nan(r²)
 
     if !isnothing(rmax)
         if sorted
@@ -103,6 +105,8 @@ function half_mass_radius(
     isnothing(sortalg) && return _half_mass_radius_select(r², m)
     return _half_mass_radius_sorted(r², m, usortperm(r²; alg=sortalg))
 end
+
+_check_no_nan(r²) = any(isnan, r²) && throw(ArgumentError("the squared radii must not contain NaN"))
 
 _throw_no_particles(::Nothing) = throw(ArgumentError("no particles given"))
 _throw_no_particles(rmax) = throw(ArgumentError("no particles within rmax = $rmax"))
@@ -272,6 +276,7 @@ function half_mass_radius(
     mass isa AbstractVector &&
         axes(mass) != axes(r²) &&
         throw(DimensionMismatch("r² and mass must have the same indices, got $(axes(r²)) and $(axes(mass))"))
+    _check_no_nan(r²)
 
     if !isnothing(rmax)
         if sorted

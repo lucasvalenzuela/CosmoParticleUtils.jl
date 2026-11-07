@@ -141,6 +141,15 @@ end
         @test_throws "no particles given" half_mass_radius(Float64[], Float64[])
         @test_throws "the total mass must be positive and finite" half_mass_radius([1.0, 4.0], [0.0, 0.0])
         @test_throws "the total mass must be positive and finite" half_mass_radius([1.0, 4.0], [1.0, NaN])
+        for kwargs in ((;), (; sortalg=MergeSort), (; sorted=true), (; rmax=1.5), (; rmax=1.5, sorted=true))
+            @test_throws "the squared radii must not contain NaN" half_mass_radius(
+                [1.0, NaN, 4.0],
+                [1.0, 1.0, 1.0];
+                kwargs...,
+            )
+            @test_throws "the squared radii must not contain NaN" half_mass_radius([1.0, NaN, 4.0]; kwargs...)
+        end
+        @test_throws "the squared radii must not contain NaN" half_mass_radius([1.0 NaN; 0.0 0.0])
         @test_throws DimensionMismatch half_mass_radius([1.0, 4.0], [1.0, 1.0, 1.0])
         @test_throws DimensionMismatch half_mass_radius([1.0, 4.0], Fill(1.0, 3))
 
