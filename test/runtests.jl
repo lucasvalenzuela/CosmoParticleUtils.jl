@@ -307,5 +307,7 @@ using Unitful
             boxcorners=([0.0, 0.0], [1.0, 1.0]),
         )
         @test smoothing_lengths(pos, 2; boxlengths) == smoothing_lengths(pos, 2)
+
+        @test smoothing_lengths(pos, Int32(2)) == smoothing_lengths(pos, 2)
     end
 end

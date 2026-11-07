@@ -367,7 +367,7 @@ function smoothing_lengths(
         tree = KDTree(pos)
     end
 
-    _, dists = knn(tree, pos, k + 1)
+    _, dists = allknn(tree, Int(k))
 
     return maximum.(dists)
 end
