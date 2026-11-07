@@ -1,11 +1,15 @@
 [deps]
 CosmoParticleUtils = "f453d4ec-1e54-4ca6-8e37-2101cbe022c0"
+CosmoParticles = "b2fead7a-f6ae-4e5b-9c3d-9b85ace3042d"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
 DocumenterInterLinks = "d12716ef-a0f6-4df4-a9f1-a5a34e75c656"
+FillArrays = "1a297f60-69ca-5386-bcde-b61e274b549b"
 
 [sources]
 CosmoParticleUtils = {path = ".."}
 
 [compat]
+CosmoParticles = "0.4"
 Documenter = "1.19"
 DocumenterInterLinks = "1.1"
+FillArrays = "1.18"
