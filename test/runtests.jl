@@ -280,6 +280,7 @@ end
         @test center_of_velocity(vpos3, vpos3, vmass3, 0.8) ≈ center_of_velocity(pos3, pos3, mass3, 0.8)
         @test_throws "offset arrays are not supported" center_of_velocity(OffsetArray(pos3, 0, -5), mass3)
         @test center_of_velocity(pos2 * u"m/s", mass2 * u"kg") isa Vector{<:Unitful.Velocity}
+        @test center_of_velocity(pos3 * u"m/s", mass3 * u"kg") ≈ center_of_velocity(pos3, mass3) * u"m/s"
     end
 
     @testset "Smoothing lengths" begin
@@ -305,12 +306,18 @@ end
         # positions outside the box are wrapped into it when only boxlengths are given
         shifted = pos .+ [3.0, -2.0] .* (axes(pos, 2)' .% 2)
         @test smoothing_lengths(shifted, 2; periodic=true, boxlengths) ≈ kth_distance(pos, 2, periodic)
+        @test smoothing_lengths(shifted, 2; periodic=true, boxlengths=SVector(1.0, 1.0)) ≈
+              kth_distance(pos, 2, periodic)
 
         # box bounds are used without wrapping
         @test smoothing_lengths(pos, 2; periodic=true, boxcorners=([0.0, 0.0], [1.0, 1.0])) ≈
               kth_distance(pos, 2, periodic)
         @test smoothing_lengths(pos .- 0.5, 2; periodic=true, boxcorners=([-0.5, -0.5], [0.5, 0.5])) ≈
               kth_distance(pos, 2, periodic)
+        @test smoothing_lengths(pos, 2; periodic=true, boxcorners=(SVector(0.0, 0.0), SVector(1.0, 1.0))) ≈
+              kth_distance(pos, 2, periodic)
+        corners = CosmoParticles.geometry_enclosing_corners(CosmoSquare([0.5, 0.5], 0.5))
+        @test smoothing_lengths(pos, 2; periodic=true, boxcorners=corners) ≈ kth_distance(pos, 2, periodic)
         @test_throws "outside the periodic box bounds" smoothing_lengths(
             shifted,
             2;
