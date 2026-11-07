@@ -25,6 +25,16 @@ function reference_half_mass_radius(r², mass)
     return r[j] + (half - c[j]) / (c[j + 1] - c[j]) * (r[j + 1] - r[j])
 end
 
+# Cases (r², mass) for which the half-mass radius from the selection (without sortalg) differs
+# from that of the stable sorting path.
+function selection_mismatches(cases; rtol=1e-12)
+    return filter(cases) do (r², m)
+        selected = half_mass_radius(r², m)
+        sorted = half_mass_radius(r², m; sortalg=MergeSort)
+        return !isapprox(selected, sorted; rtol) || typeof(selected) != typeof(sorted)
+    end
+end
+
 @testset "CosmoParticleUtils.jl" begin
     @testset "Code quality" begin
         Aqua.test_all(CosmoParticleUtils)
@@ -133,6 +143,91 @@ end
         @test_throws "the total mass must be positive and finite" half_mass_radius([1.0, 4.0], [1.0, NaN])
         @test_throws DimensionMismatch half_mass_radius([1.0, 4.0], [1.0, 1.0, 1.0])
         @test_throws DimensionMismatch half_mass_radius([1.0, 4.0], Fill(1.0, 3))
+
+        # without sortalg, the particles around half the mass are selected without sorting all
+        for (r², m) in (
+            (rand(rng, 1000), rand(rng, 1000)),
+            (Float64.(rand(rng, 1:20, 1000)), rand(rng, 1000)),                  # equal radii
+            (rand(rng, 1000), Float64.(rand(rng, 0:2, 1000))),                   # zero masses
+            (Float64.(rand(rng, 1:5, 1000)), Float64.(rand(rng, 0:1, 1000))),
+        )
+            @test half_mass_radius(r², m) ≈ half_mass_radius(r², m; sortalg=MergeSort)
+            @test half_mass_radius(r², m) ≈ reference_half_mass_radius(r², m)
+        end
+
+        @testset "Selection against sorting" begin
+            srng = Xoshiro(42)
+
+            # random radii and masses for sizes around the switch to sorting at 32 particles
+            cases = [(rand(srng, n), rand(srng, n)) for n in [1:100; 127:129; 1000; 4097] for _ in 1:20]
+            @test isempty(selection_mismatches(cases))
+
+            # few distinct radii, so that many radii equal the pivot
+            cases = [
+                (Float64.(rand(srng, 1:d, n)), rand(srng, n)) for d in (1, 2, 3, 10) for
+                n in (2, 33, 100, 1000, 5000) for _ in 1:10
+            ]
+            @test isempty(selection_mismatches(cases))
+
+            # orders that are unfavorable for the choice of the pivot
+            orders = [
+                n -> collect(1.0:n),
+                n -> collect(n:-1.0:1),
+                n -> Float64[i ≤ n ÷ 2 ? i : n - i for i in 1:n],          # organ pipe
+                n -> Float64[i % 7 for i in 1:n],                          # sawtooth
+                n -> Float64[isodd(i) ? i : n - i for i in 1:n],           # alternating
+                n -> fill(1.0, n),
+            ]
+            cases =
+                [(order(n), rand(srng, n)) for order in orders for n in (1, 2, 31, 32, 33, 64, 1000, 10_000)]
+            @test isempty(selection_mismatches(cases))
+
+            # zero masses, a single nonzero mass, and a dominant mass at random positions
+            cases = []
+            for n in (2, 5, 33, 100, 1000), _ in 1:20
+                x² = rand(srng, n)
+                push!(cases, (x², Float64.(rand(srng, n) .< 0.5)))
+                push!(cases, (x², Float64.(rand(srng, n) .< 0.1)))
+                push!(cases, (x², [i == rand(srng, 1:n) ? 1.0 : 0.0 for i in 1:n]))
+                dominant = rand(srng, n)
+                dominant[rand(srng, 1:n)] = 1e6
+                push!(cases, (x², dominant))
+                push!(cases, (x², 10.0 .^ rand(srng, -10:10, n)))
+            end
+            cases = filter(((r², m),) -> sum(m) > 0, cases)
+            @test isempty(selection_mismatches(cases))
+
+            # integer masses: half the mass often lies exactly between two particles, so that the
+            # predecessor or successor of the particle at half the mass is outside the last range
+            cases =
+                [(rand(srng, n), Float64.(rand(srng, 1:2, n))) for n in [2:40; 100; 1000; 1001] for _ in 1:20]
+            append!(cases, [(rand(srng, n), ones(n)) for n in 1:200])
+            append!(cases, [(Float64.(rand(srng, 1:5, n)), Float64.(rand(srng, 0:2, n))) for n in 2:200])
+            cases = filter(((r², m),) -> sum(m) > 0, cases)
+            @test isempty(selection_mismatches(cases))
+            # equal masses give the median radius
+            for n in [1:200; 1000; 1001]
+                x² = rand(srng, n)
+                @test half_mass_radius(x², fill(2.0, n)) ≈ median(sqrt.(x²))
+            end
+
+            # other number types
+            x² = rand(srng, 1000)
+            w = rand(srng, 1000)
+            @test isempty(selection_mismatches([(Float32.(x²), Float32.(w))]; rtol=1e-5))
+            @test isempty(selection_mismatches([(x² * u"m^2", w * u"kg")]))
+            @test isempty(selection_mismatches([(x², rand(srng, 1:10, 1000))]))
+            @test isempty(selection_mismatches([(big.(x²), big.(w))]))
+            @test half_mass_radius(x² * u"m^2", w * u"kg") ≈ half_mass_radius(x², w) * u"m"
+
+            # indices other than 1:n, views, and rmax
+            @test half_mass_radius(OffsetArray(x², -500), OffsetArray(w, -500)) ≈ half_mass_radius(x², w)
+            @test half_mass_radius(view(x², 2:2:1000), view(w, 2:2:1000)) ≈
+                  half_mass_radius(x²[2:2:1000], w[2:2:1000]; sortalg=MergeSort)
+            for rmax in (0.1, 0.5, 0.9)
+                @test half_mass_radius(x², w; rmax) ≈ half_mass_radius(x², w; rmax, sortalg=MergeSort)
+            end
+        end
 
         # radii measured from r0
         c = [1.0, 2.0, 3.0]
