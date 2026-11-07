@@ -12,25 +12,61 @@ export half_mass_radius, center_of_mass_iterative, center_of_velocity, smoothing
 
 
 """
-    half_mass_radius(p::AbstractParticles; posprop=:pos, massprop=:mass, r2prop=nothing)
-    half_mass_radius(pos::AbstractMatrix{<:Number}, mass::Union{AbstractVector{<:Number},Number,Nothing})
-    half_mass_radius(r²::AbstractVector{<:Number}, mass::Union{AbstractVector{<:Number},Number,Nothing})
+    half_mass_radius(pos::AbstractMatrix{<:Number}, mass=nothing; kwargs...)
+    half_mass_radius(r²::AbstractVector{<:Number}, mass=nothing; kwargs...)
+    half_mass_radius(p::AbstractParticles; posprop=:pos, massprop=:mass, r2prop=nothing, kwargs...)
 
 Returns the half-mass radius of the particles around `r0` within radius `rmax`, or of all
 particles if `rmax` is `nothing`.
 
-This works for any dimensions of the position matrix (2D, 3D, etc.). Throws an error if there
-are no particles, or if the total mass is not positive and finite.
+The particles are given by their positions `pos`, a ``d × N`` matrix for any dimension ``d``, by
+their squared radii `r²`, or as [`AbstractParticles`](@extref CosmoParticles.AbstractParticles)
+with the properties `posprop` and `massprop`, or `r2prop` for squared radii. The masses are a
+vector, or a number, a [`Fill`](@extref FillArrays.Fill) vector or `nothing` for equal masses.
+Throws an error if there are no particles, or if the total mass is not positive and finite.
 
 # Keyword arguments
 - `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center from which the radii are measured;
   `nothing` means it uses the origin. Only for positions, not for `r²` or `r2prop`.
-- `rmax::Union{Number,Nothing}=nothing`
+- `rmax::Union{Number,Nothing}=nothing`: radius within which the particles are considered
 - `sortalg=nothing`: sorting algorithm passed to
   [`usortperm`](@extref FastUnitfulOperations.usortperm) as `alg`, e.g.
   [`QuickSort`](@extref Base.Sort.QuickSort); `nothing` uses the default of `usortperm`, which is
   faster for large vectors
-- `sorted=false`: whether r² can be assumed to be sorted
+- `sorted=false`: whether `r²` is sorted in increasing order, which skips the sorting
+
+# Examples
+```jldoctest
+julia> using CosmoParticles, FillArrays
+
+julia> pos = [1.0 0.0 -2.0 0.0; 0.0 3.0 0.0 -4.0];
+
+julia> mass = [4.0, 1.0, 1.0, 1.0];
+
+julia> half_mass_radius(pos, mass)
+1.6
+
+julia> half_mass_radius(pos, Fill(1.0, 4))
+2.5
+
+julia> half_mass_radius(pos, mass; rmax=2.5)
+1.2
+
+julia> r0 = [1.0, 2.0];
+
+julia> half_mass_radius(pos .+ r0, mass; r0)
+1.6
+
+julia> r² = colnorm2(pos);
+
+julia> half_mass_radius(r², mass)
+1.6
+
+julia> p = Particles(:dm, :pos => pos, :mass => mass);
+
+julia> half_mass_radius(p)
+1.6
+```
 """
 function half_mass_radius(pos::AbstractMatrix{<:Number}, mass=nothing; r0=nothing, kwargs...)
     r² = isnothing(r0) ? colnorm2(pos) : colnorm2(pos, r0)
@@ -153,18 +189,23 @@ end
 
 
 @doc raw"""
-    center_of_mass_iterative(pos::AbstractMatrix{<:Number}, mass::Union{Number,AbstractVector{<:Number}}, r_start::Number)
-    center_of_mass_iterative(p::AbstractParticles, r_start::Number; posprop=:pos, massprop=:mass)
+    center_of_mass_iterative(pos::AbstractMatrix{<:Number}, mass, r_start::Number; kwargs...)
+    center_of_mass_iterative(p::AbstractParticles, r_start::Number; posprop=:pos, massprop=:mass, kwargs...)
 
 Returns the center of mass by applying the shrinking sphere method
 ([Power et al. 2003](https://arxiv.org/abs/astro-ph/0201544)).
 
-The sphere starts centered at `r0` with a radius of `r_start` and
-shrinks by `shrinking_factor` every iteration. The iteration is stopped when the sphere
-contains fewer than `limit_number` and fewer than `limit_fraction` times the number of particles in the
-starting sphere, whichever is smaller. In addition, the iteration is stopped when the radius
-of the sphere drops below `limit_radius`. Note that the unit of `limit_radius` should be the
-same as that of `r_start`. Throws an error if the starting sphere contains no particles.
+The particles are given by their positions `pos`, a ``d × N`` matrix for any dimension ``d``, or
+as [`AbstractParticles`](@extref CosmoParticles.AbstractParticles) with the properties `posprop`
+and `massprop`. The masses are a vector, or a number, a [`Fill`](@extref FillArrays.Fill) vector or
+`nothing` for equal masses.
+
+The sphere starts centered at `r0` with a radius of `r_start` and moves to the center of mass of
+the particles within it, while it shrinks by `shrinking_factor` every iteration. The iteration
+is stopped when the sphere contains fewer than `limit_number` and fewer than `limit_fraction`
+times the number of particles in the starting sphere, whichever is smaller. In addition, the
+iteration is stopped when the radius of the sphere drops below `limit_radius`, which has the same
+unit as `r_start`. Throws an error if the starting sphere contains no particles.
 
 The radius of the sphere in iteration step ``i`` is ``r_\mathrm{start} (1 - f_\mathrm{shrink})^i``.
 The center is returned as a vector of floating-point numbers.
@@ -176,6 +217,18 @@ The center is returned as a vector of floating-point numbers.
 - `limit_fraction::Real=0.01`
 - `limit_number::Integer=1000`
 - `limit_radius::Number=0`
+
+# Examples
+```jldoctest
+julia> using FillArrays
+
+julia> pos = [4.0 4.2 3.8 4.0 4.0 -6.0 0.0 7.0; 3.0 3.0 3.0 3.2 2.8 0.0 -5.0 -6.0];
+
+julia> center_of_mass_iterative(pos, Fill(1.0, 8), 10.0)
+2-element Vector{Float64}:
+ 4.0
+ 3.0
+```
 """
 function center_of_mass_iterative(
     pos::AbstractMatrix{T},
@@ -251,19 +304,55 @@ end
 
 
 """
-    center_of_velocity(vel::AbstractMatrix{<:Number}, mass::Union{Number,AbstractVector{<:Number}})
-    center_of_velocity(pos::AbstractMatrix{<:Number}, vel::AbstractMatrix{<:Number}, mass::Union{Number,AbstractVector{<:Number}}, radius::Number)
-    center_of_velocity(p::AbstractParticles, [radius::Number]; posprop=:pos, velprop=:vel, massprop=:mass)
+    center_of_velocity(vel::AbstractMatrix{<:Number}, mass; kwargs...)
+    center_of_velocity(pos::AbstractMatrix{<:Number}, vel::AbstractMatrix{<:Number}, mass, radius::Number; kwargs...)
+    center_of_velocity(p::AbstractParticles, radius::Number=Inf; posprop=:pos, velprop=:vel, massprop=:mass, kwargs...)
 
-Returns the [mass-weighted mean](@extref StatsBase Statistics.mean) velocity vector within
-`radius` around `r0`, only considering absolute velocities smaller than the `p`th
-[`quantile`](@extref Statistics.quantile) (any value between 0 and 1) when centered around the
-[`median`](@extref Statistics.median) velocity. The median and the quantile are not weighted.
+Returns the [mass-weighted mean](@extref StatsBase Statistics.mean) velocity vector of the
+particles within `radius` around `r0`, or of all particles if no positions or an infinite
+`radius` are given.
+
+Only the particles whose velocities deviate least from the
+[`median`](@extref Statistics.median) velocity are included: those for which the absolute
+velocity relative to the median velocity is at most the `p`th
+[`quantile`](@extref Statistics.quantile) (any value between 0 and 1) of these magnitudes. The
+median and the quantile are not weighted.
+
+The particles are given by their velocities `vel` and positions `pos`, ``d × N`` matrices for any
+dimension ``d``, or as [`AbstractParticles`](@extref CosmoParticles.AbstractParticles) with the
+properties `posprop`, `velprop` and `massprop`. The masses are a vector, or a number, a
+[`Fill`](@extref FillArrays.Fill) vector or `nothing` for equal masses.
 
 # Keyword arguments
 - `p::Real=0.9`
 - `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center of the sphere; `nothing` means it
   uses the origin
+
+# Examples
+```jldoctest
+julia> using FillArrays
+
+julia> vel = [1.0 2.0 3.0 2.0 50.0; 0.0 1.0 0.0 -1.0 0.0];
+
+julia> mass = Fill(1.0, 5);
+
+julia> center_of_velocity(vel, mass)
+2-element Vector{Float64}:
+ 2.0
+ 0.0
+
+julia> center_of_velocity(vel, mass; p=1.0)
+2-element Vector{Float64}:
+ 11.6
+  0.0
+
+julia> pos = [0.5 1.0 -1.0 0.0 8.0; 0.0 0.5 0.0 -1.0 0.0];
+
+julia> center_of_velocity(pos, vel, [2.0, 1.0, 1.0, 1.0, 1.0], 2.0)
+2-element Vector{Float64}:
+ 1.8
+ 0.0
+```
 """
 function center_of_velocity(
     pos::AbstractMatrix{<:Number},
@@ -316,12 +405,14 @@ end
 
 
 """
-    smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=nothing, boxcorners=nothing)
+    smoothing_lengths(pos::AbstractMatrix, k::Integer; kwargs...)
     smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...)
 
 Returns the distance of each particle to its `k`th-nearest neighbor, not counting the particle
 itself.
 
+The particles are given by their positions `pos`, a ``d × N`` matrix for any dimension ``d``, or
+as [`AbstractParticles`](@extref CosmoParticles.AbstractParticles) with the property `posprop`.
 The distances are determined with [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl)
 using a `KDTree`, which is wrapped in a `PeriodicTree` for periodic boundaries.
 
@@ -330,17 +421,38 @@ the positions are wrapped into the box from zero to `boxlengths`, which needs a 
 positions. With `boxcorners`, no copy is made, and all positions have to lie within the box. The
 box values are ignored if `periodic` is `false`.
 
-# Keyword Arguments
+# Keyword arguments
 - `periodic=false`: whether to take the periodic boundaries of the simulation box into account
 - `boxlengths=nothing`: vector of the box length in each direction
-- `boxcorners=nothing`: tuple `(lowerleft, upperright)` of the vectors of the lower and upper box bounds
-  in each direction
+- `boxcorners=nothing`: tuple `(lowerleft, upperright)` of the vectors of the lower and upper box
+  bounds in each direction
 
 # Examples
-```julia
-pos = rand(3, 100)
-k = 16
-smoothing_lengths(pos, k)
+```jldoctest
+julia> pos = [0.0 1.0 3.0 6.0; 0.0 0.0 0.0 0.0];
+
+julia> smoothing_lengths(pos, 2)
+4-element Vector{Float64}:
+ 3.0
+ 2.0
+ 3.0
+ 5.0
+
+julia> boxlengths = [8.0, 8.0];
+
+julia> smoothing_lengths(pos, 2; periodic=true, boxlengths)
+4-element Vector{Float64}:
+ 2.0
+ 2.0
+ 3.0
+ 3.0
+
+julia> smoothing_lengths(pos, 2; periodic=true, boxcorners=(zero(boxlengths), boxlengths))
+4-element Vector{Float64}:
+ 2.0
+ 2.0
+ 3.0
+ 3.0
 ```
 """
 function smoothing_lengths(
