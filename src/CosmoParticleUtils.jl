@@ -16,13 +16,15 @@ export half_mass_radius, center_of_mass_iterative, center_of_velocity, get_smoot
     half_mass_radius(pos::AbstractMatrix{<:Number}, mass::Union{AbstractVector{<:Number},Number,Nothing})
     half_mass_radius(r²::AbstractVector{<:Number}, mass::Union{AbstractVector{<:Number},Number,Nothing})
 
-Returns the half-mass radius of the particles within radius `rmax` of the origin, or of all
+Returns the half-mass radius of the particles around `r0` within radius `rmax`, or of all
 particles if `rmax` is `nothing`.
 
 This works for any dimensions of the position matrix (2D, 3D, etc.). Throws an error if there
 are no particles, or if the total mass is not positive and finite.
 
 # Keyword arguments
+- `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center from which the radii are measured;
+  `nothing` means it uses the origin. Only for positions, not for `r²` or `r2prop`.
 - `rmax::Union{Number,Nothing}=nothing`
 - `sortalg=nothing`: sorting algorithm passed to
   [`usortperm`](@extref FastUnitfulOperations.usortperm) as `alg`, e.g.
@@ -30,8 +32,8 @@ are no particles, or if the total mass is not positive and finite.
   faster for large vectors
 - `sorted=false`: whether r² can be assumed to be sorted
 """
-function half_mass_radius(pos::AbstractMatrix{<:Number}, mass=nothing; kwargs...)
-    r² = colnorm2(pos)
+function half_mass_radius(pos::AbstractMatrix{<:Number}, mass=nothing; r0=nothing, kwargs...)
+    r² = isnothing(r0) ? colnorm2(pos) : colnorm2(pos, r0)
     return half_mass_radius(r², mass; kwargs...)
 end
 
@@ -142,6 +144,7 @@ end
 
 function half_mass_radius(p::AbstractParticles; posprop=:pos, massprop=:mass, r2prop=nothing, kwargs...)
     if !isnothing(r2prop)
+        haskey(kwargs, :r0) && throw(ArgumentError("r0 cannot be combined with r2prop"))
         return half_mass_radius(p[r2prop], p[massprop]; kwargs...)
     else
         return half_mass_radius(p[posprop], p[massprop]; kwargs...)
@@ -156,16 +159,18 @@ end
 Returns the center of mass by applying the shrinking sphere method
 ([Power et al. 2003](https://arxiv.org/abs/astro-ph/0201544)).
 
-The sphere starts centered at the coordinate system's origin with a radius of `r_start` and
+The sphere starts centered at `r0` with a radius of `r_start` and
 shrinks by `shrinking_factor` every iteration. The iteration is stopped when the sphere
 contains fewer than `limit_number` and fewer than `limit_fraction` times the number of particles in the
 starting sphere, whichever is smaller. In addition, the iteration is stopped when the radius
 of the sphere drops below `limit_radius`. Note that the unit of `limit_radius` should be the
 same as that of `r_start`. Throws an error if the starting sphere contains no particles.
 
-The radius of the sphere in iteration step ``i`` is ``r_0 (1 - f_\mathrm{shrink})^i``.
+The radius of the sphere in iteration step ``i`` is ``r_\mathrm{start} (1 - f_\mathrm{shrink})^i``.
 
 # Keyword arguments
+- `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center of the starting sphere; `nothing`
+  means it uses the origin
 - `shrinking_factor::Real=0.025`
 - `limit_fraction::Real=0.01`
 - `limit_number::Integer=1000`
@@ -179,11 +184,18 @@ function center_of_mass_iterative(
     limit_fraction::Real=0.01,
     limit_number::Integer=1000,
     limit_radius::Number=zero(R),
+    r0::Union{AbstractVector{<:Number},Nothing}=nothing,
 ) where {T<:Number,R<:Number,S<:Real}
     0 < shrinking_factor < 1 ||
         throw(ArgumentError("shrinking_factor must be between 0 and 1, got $shrinking_factor"))
 
+    # the center is updated in place, so it is a new vector even if r0 is given
     r₀ = zeros(T, size(pos, 1))
+    if !isnothing(r0)
+        length(r0) == length(r₀) ||
+            throw(DimensionMismatch("r0 must have $(length(r₀)) elements, got $(length(r0))"))
+        copyto!(r₀, r0)
+    end
     r²_max = r_start^2
     r²_limit = (limit_radius / (oneunit(S) - shrinking_factor))^2
 
@@ -191,7 +203,7 @@ function center_of_mass_iterative(
     r² = colnorm2(pos, r₀)
     mask = r² .≤ r²_max # this will be reused further down
     n = count(mask)
-    n > 0 || throw(ArgumentError("no particles within r_start = $r_start of the origin"))
+    n > 0 || throw(ArgumentError("no particles within r_start = $r_start of r0"))
 
     # get number limit for when the algorithm should stop; at least 1, so that the loop ends when
     # the sphere is empty
@@ -243,8 +255,8 @@ Returns the [mass-weighted mean](@extref StatsBase Statistics.mean) velocity vec
 
 # Keyword arguments
 - `p::Real=0.9`
-- `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center of the sphere; `nothing` is the
-  origin
+- `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center of the sphere; `nothing` means it
+  uses the origin
 """
 function center_of_velocity(
     pos::AbstractMatrix{<:Number},

@@ -7,6 +7,7 @@ using Test
 using CosmoParticles
 using FillArrays
 using Random
+using StaticArrays
 using Statistics
 using Unitful
 
@@ -131,6 +132,13 @@ using Unitful
         @test_throws "the total mass must be positive and finite" half_mass_radius([1.0, 4.0], [1.0, NaN])
         @test_throws DimensionMismatch half_mass_radius([1.0, 4.0], [1.0, 1.0, 1.0])
         @test_throws DimensionMismatch half_mass_radius([1.0, 4.0], Fill(1.0, 3))
+
+        # radii measured from r0
+        c = [1.0, 2.0, 3.0]
+        @test half_mass_radius(pos3 .+ c, mass3; r0=c) ≈ rhalf3
+        @test half_mass_radius(pos3 .+ c, mass3; r0=SVector(1.0, 2.0, 3.0)) ≈ rhalf3
+        @test half_mass_radius(Particles(:dm, :pos => pos3 .+ c, :mass => mass3); r0=c) ≈ rhalf3
+        @test_throws "r0 cannot be combined with r2prop" half_mass_radius(p3; r2prop=:r2, r0=c)
     end
 
     @testset "Center of Mass" begin
@@ -181,6 +189,15 @@ using Unitful
             shrinking_factor=0,
         )
         @test center_of_mass_iterative(pos3, mass3, 1; limit_fraction=0) isa Vector{Float64}
+
+        # starting sphere around r0
+        c = [1.0, 2.0, 3.0]
+        com = center_of_mass_iterative(pos3, mass3, 1)
+        @test center_of_mass_iterative(pos3 .+ c, mass3, 1; r0=c) ≈ com .+ c
+        @test center_of_mass_iterative(pos3 .+ c, mass3, 1; r0=SVector(1.0, 2.0, 3.0)) ≈ com .+ c
+        @test center_of_mass_iterative(p3, 1; r0=zeros(3)) == com
+        @test c == [1.0, 2.0, 3.0]
+        @test_throws DimensionMismatch center_of_mass_iterative(pos3, mass3, 1; r0=[0.0, 0.0])
     end
 
     @testset "Center of Velocity" begin
@@ -219,6 +236,7 @@ using Unitful
         cov = center_of_velocity(pos3, pos3, mass3, 0.8)
         @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=nothing) == cov
         @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=zeros(3)) == cov
+        @test center_of_velocity(pos3, pos3, mass3, 0.8; r0=SVector(0.0, 0.0, 0.0)) == cov
 
         # equal masses, stored as a Fill vector in Particles
         pfill = Particles(:dm, :pos => pos3, :vel => pos3, :mass => 2.0)
