@@ -215,6 +215,8 @@ function center_of_mass_iterative(
     nlimit = max(1, min(limit_number, ceil(Int, limit_fraction * n)))
     while n ≥ nlimit && r²_max ≥ r²_limit
         _mean_position!(r₀, pos, mass, mask)
+        # the center of a single particle is its position, which stays within every smaller sphere
+        n == 1 && break
         r²_max *= (oneunit(S) - shrinking_factor)^2
 
         r² = colnorm2(pos, r₀)

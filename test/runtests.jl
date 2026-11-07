@@ -207,6 +207,12 @@ end
         )
         @test center_of_mass_iterative(pos3, mass3, 1; limit_fraction=0) isa Vector{Float64}
 
+        # few particles: the iteration ends when the sphere contains a single particle
+        fewpos = [4.0 4.2 3.8 4.0 4.0 -6.0 0.0 7.0; 3.0 3.0 3.0 3.2 2.8 0.0 -5.0 -6.0]
+        @test center_of_mass_iterative(fewpos, Fill(1.0, 8), 10.0) == [4.0, 3.0]
+        @test center_of_mass_iterative(fewpos .+ [0.05, 0.0], Fill(1.0, 8), 10.0) ≈ [4.05, 3.0]
+        @test center_of_mass_iterative([1.0 5.0; 0.0 0.0], [1.0, 1.0], 2.0) == [1.0, 0.0]
+
         # starting sphere around r0
         c = [1.0, 2.0, 3.0]
         com = center_of_mass_iterative(pos3, mass3, 1)
