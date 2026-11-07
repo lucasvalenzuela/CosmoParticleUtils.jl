@@ -529,7 +529,8 @@ itself.
 The particles are given by their positions `pos`, a ``d × N`` matrix for any dimension ``d``, or
 as [`AbstractParticles`](@extref CosmoParticles.AbstractParticles) with the property `posprop`.
 The distances are determined with [NearestNeighbors.jl](https://github.com/KristofferC/NearestNeighbors.jl)
-using a `KDTree`, which is wrapped in a `PeriodicTree` for periodic boundaries.
+using a `KDTree`, which is wrapped in a `PeriodicTree` for periodic boundaries. The particles are
+distributed over all available threads.
 
 For periodic boundaries, either `boxlengths` or `boxcorners` has to be given. With `boxlengths`,
 the positions are wrapped into the box from zero to `boxlengths`, which needs a copy of the
@@ -598,9 +599,30 @@ function smoothing_lengths(
         tree = KDTree(pos)
     end
 
-    _, dists = allknn(tree, Int(k))
+    n = size(pos, 2)
+    k < n ||
+        throw(ArgumentError("k must be smaller than the number of particles, got k = $k for $n particles"))
+    return _kth_neighbor_distances(tree, pos, Int(k))
+end
 
-    return maximum.(dists)
+# Distance of each particle to its kth-nearest neighbor. The particles are processed in parallel
+# chunks with their own buffers, so that only one distance per particle is stored.
+function _kth_neighbor_distances(tree, pos, k)
+    h = Vector{float(eltype(pos))}(undef, size(pos, 2))
+    chunks = Iterators.partition(eachindex(h), cld(length(h), 4 * Threads.nthreads()))
+    tasks = map(chunks) do chunk
+        Threads.@spawn begin
+            idxs = Vector{Int}(undef, k + 1)
+            dists = similar(h, k + 1)
+            for i in chunk
+                # the k + 1 nearest particles include the particle itself
+                knn!(idxs, dists, tree, view(pos, :, i), k + 1)
+                h[i] = maximum(dists)
+            end
+        end
+    end
+    foreach(wait, tasks)
+    return h
 end
 
 smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...) =

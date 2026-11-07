@@ -371,6 +371,10 @@ end
 
         @test smoothing_lengths(view(hcat(pos, pos), :, 6:10), 2) ≈ smoothing_lengths(pos, 2)
         @test smoothing_lengths(pos, Int32(2)) == smoothing_lengths(pos, 2)
+        @test smoothing_lengths(Float32.(pos), 2) ≈ smoothing_lengths(pos, 2)
+        @test smoothing_lengths(Float32.(pos), 2) isa Vector{Float32}
+        @test smoothing_lengths(round.(Int, 10 .* pos), 1) isa Vector{Float64}
+        @test_throws "k must be smaller than the number of particles" smoothing_lengths(pos, 5)
         @test_throws "offset arrays are not supported" smoothing_lengths(OffsetArray(pos, 0, -2), 2)
     end
 end
