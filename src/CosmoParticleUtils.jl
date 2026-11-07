@@ -8,7 +8,7 @@ using NearestNeighbors
 using Statistics
 using StatsBase
 
-export half_mass_radius, center_of_mass_iterative, center_of_velocity, get_smoothing_lengths
+export half_mass_radius, center_of_mass_iterative, center_of_velocity, smoothing_lengths
 
 
 """
@@ -314,8 +314,8 @@ end
 
 
 """
-    get_smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=nothing, boxcorners=nothing)
-    get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...)
+    smoothing_lengths(pos::AbstractMatrix, k::Integer; periodic=false, boxlengths=nothing, boxcorners=nothing)
+    smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...)
 
 Returns the distance of each particle to its `k`th-nearest neighbor, not counting the particle
 itself.
@@ -338,10 +338,10 @@ box values are ignored if `periodic` is `false`.
 ```julia
 pos = rand(3, 100)
 k = 16
-get_smoothing_lengths(pos, k)
+smoothing_lengths(pos, k)
 ```
 """
-function get_smoothing_lengths(
+function smoothing_lengths(
     pos::AbstractMatrix,
     k::Integer;
     periodic=false,
@@ -372,8 +372,8 @@ function get_smoothing_lengths(
     return maximum.(dists)
 end
 
-get_smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...) =
-    get_smoothing_lengths(p[posprop], k; kwargs...)
+smoothing_lengths(p::AbstractParticles, k::Integer; posprop=:pos, kwargs...) =
+    smoothing_lengths(p[posprop], k; kwargs...)
 
 
 end # module
