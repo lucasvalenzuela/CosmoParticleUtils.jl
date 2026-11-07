@@ -6,10 +6,24 @@ using Test
 
 using CosmoParticles
 using FillArrays
+using OffsetArrays
 using Random
 using StaticArrays
 using Statistics
 using Unitful
+
+# interpolation at half the total mass between the middles of the particles' masses
+function reference_half_mass_radius(r², mass)
+    ind = sortperm(r²)
+    r = sqrt.(r²[ind])
+    m = mass[ind]
+    c = cumsum(m) .- m ./ 2
+    half = sum(m) / 2
+    j = searchsortedlast(c, half)
+    j == 0 && return r[1]
+    j == length(c) && return r[end]
+    return r[j] + (half - c[j]) / (c[j + 1] - c[j]) * (r[j + 1] - r[j])
+end
 
 @testset "CosmoParticleUtils.jl" begin
     @testset "Code quality" begin
@@ -84,19 +98,6 @@ using Unitful
         @test half_mass_radius(pfill) == half_mass_radius(pos3, nothing)
         @test half_mass_radius(pfill) == half_mass_radius(pos3, 2.0)
 
-        # interpolation at half the total mass between the middles of the particles' masses
-        function reference_half_mass_radius(r², mass)
-            ind = sortperm(r²)
-            r = sqrt.(r²[ind])
-            m = mass[ind]
-            c = cumsum(m) .- m ./ 2
-            half = sum(m) / 2
-            j = searchsortedlast(c, half)
-            j == 0 && return r[1]
-            j == length(c) && return r[end]
-            return r[j] + (half - c[j]) / (c[j + 1] - c[j]) * (r[j + 1] - r[j])
-        end
-
         rng = Xoshiro(1)
         for n in (1, 2, 9, 10, 1001)
             r² = rand(rng, n)
@@ -139,6 +140,22 @@ using Unitful
         @test half_mass_radius(pos3 .+ c, mass3; r0=SVector(1.0, 2.0, 3.0)) ≈ rhalf3
         @test half_mass_radius(Particles(:dm, :pos => pos3 .+ c, :mass => mass3); r0=c) ≈ rhalf3
         @test_throws "r0 cannot be combined with r2prop" half_mass_radius(p3; r2prop=:r2, r0=c)
+
+        # indices other than 1:n and views
+        or² = OffsetArray(r², -50)
+        om = OffsetArray(m, -50)
+        perm = sortperm(r²)
+        @test half_mass_radius(or², om) ≈ half_mass_radius(r², m)
+        @test half_mass_radius(OffsetArray(r²[perm], 7), OffsetArray(m[perm], 7); rmax=0.5, sorted=true) ≈
+              half_mass_radius(r², m; rmax=0.5)
+        @test half_mass_radius(or², nothing) ≈ half_mass_radius(r², nothing)
+        @test half_mass_radius(or²[begin:(end - 1)], nothing) ≈ half_mass_radius(r²[1:(end - 1)], nothing)
+        @test half_mass_radius(OffsetArray(sort(r²), 7), nothing; rmax=0.5, sorted=true) ≈
+              half_mass_radius(r², nothing; rmax=0.5)
+        @test half_mass_radius(view(vcat(r², r²), 101:200), view(vcat(m, m), 101:200)) ≈
+              half_mass_radius(r², m)
+        @test half_mass_radius(view(hcat(pos3, pos3), :, axes(pos3, 2)), mass3) ≈ rhalf3
+        @test_throws "offset arrays are not supported" half_mass_radius(OffsetArray(pos3, 0, -5), mass3)
     end
 
     @testset "Center of Mass" begin
@@ -201,6 +218,17 @@ using Unitful
 
         # integer positions give a floating-point center
         @test center_of_mass_iterative(round.(Int, 10 .* pos3), mass3, 10) isa Vector{Float64}
+
+        @test center_of_mass_iterative(
+            view(hcat(pos3, pos3), :, axes(pos3, 2)),
+            view(vcat(mass3, mass3), axes(mass3, 1)),
+            1,
+        ) ≈ com
+        @test_throws "offset arrays are not supported" center_of_mass_iterative(
+            OffsetArray(pos3, 0, -5),
+            mass3,
+            1,
+        )
     end
 
     @testset "Center of Velocity" begin
@@ -245,6 +273,12 @@ using Unitful
         pfill = Particles(:dm, :pos => pos3, :vel => pos3, :mass => 2.0)
         @test center_of_velocity(pfill) == center_of_velocity(pos3, nothing)
         @test center_of_velocity(pfill, 0.8) == center_of_velocity(pos3, pos3, nothing, 0.8)
+
+        vpos3 = view(hcat(pos3, pos3), :, axes(pos3, 2))
+        vmass3 = view(vcat(mass3, mass3), axes(mass3, 1))
+        @test center_of_velocity(vpos3, vmass3) ≈ center_of_velocity(pos3, mass3)
+        @test center_of_velocity(vpos3, vpos3, vmass3, 0.8) ≈ center_of_velocity(pos3, pos3, mass3, 0.8)
+        @test_throws "offset arrays are not supported" center_of_velocity(OffsetArray(pos3, 0, -5), mass3)
         @test center_of_velocity(pos2 * u"m/s", mass2 * u"kg") isa Vector{<:Unitful.Velocity}
     end
 
@@ -308,6 +342,8 @@ using Unitful
         )
         @test smoothing_lengths(pos, 2; boxlengths) == smoothing_lengths(pos, 2)
 
+        @test smoothing_lengths(view(hcat(pos, pos), :, 6:10), 2) ≈ smoothing_lengths(pos, 2)
         @test smoothing_lengths(pos, Int32(2)) == smoothing_lengths(pos, 2)
+        @test_throws "offset arrays are not supported" smoothing_lengths(OffsetArray(pos, 0, -2), 2)
     end
 end

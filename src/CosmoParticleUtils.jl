@@ -133,10 +133,10 @@ function half_mass_radius(
     if sorted
         r1 = r²[firstindex(r²) + k - 1]
         r2 = r²[lastindex(r²) - k + 1]
-    elseif iseven(n)
-        r1, r2 = partialsort(r², k:(k + 1))
     else
-        r1 = r2 = partialsort(r², k)
+        # partialsort selects by index in the sorted vector, which has the axes of r²
+        i = firstindex(r²) + k - 1
+        r1, r2 = iseven(n) ? partialsort(r², i:(i + 1)) : (r=partialsort(r², i); (r, r))
     end
 
     return 1 // 2 * (sqrt(r1) + sqrt(r2))
@@ -348,6 +348,8 @@ function smoothing_lengths(
     boxlengths=nothing,
     boxcorners=nothing,
 )
+    # NearestNeighbors indexes the particles from 1
+    Base.require_one_based_indexing(pos)
     if periodic
         if !isnothing(boxlengths)
             isnothing(boxcorners) || throw(ArgumentError("give either boxlengths or boxcorners, not both"))
