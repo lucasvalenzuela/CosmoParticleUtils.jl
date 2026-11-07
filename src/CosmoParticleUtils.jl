@@ -8,7 +8,8 @@ using NearestNeighbors
 using Statistics
 using StatsBase
 
-export half_mass_radius, center_of_mass_iterative, center_of_velocity, smoothing_lengths
+export half_mass_radius,
+    center_of_mass_iterative, center_of_mass_iterative_info, center_of_velocity, smoothing_lengths
 
 
 """
@@ -209,6 +210,8 @@ unit as `r_start`. Throws an error if the starting sphere contains no particles.
 
 The radius of the sphere in iteration step ``i`` is ``r_\mathrm{start} (1 - f_\mathrm{shrink})^i``.
 The center is returned as a vector of floating-point numbers.
+[`center_of_mass_iterative_info`](@ref) also returns the final radius, the number of particles, and
+why the iteration stopped.
 
 # Keyword arguments
 - `r0::Union{AbstractVector{<:Number},Nothing}=nothing`: center of the starting sphere; `nothing`
@@ -230,7 +233,62 @@ julia> center_of_mass_iterative(pos, Fill(1.0, 8), 10.0)
  3.0
 ```
 """
+function center_of_mass_iterative(pos::AbstractMatrix{<:Number}, mass, r_start::Number; kwargs...)
+    return center_of_mass_iterative_info(pos, mass, r_start; kwargs...).center
+end
+
 function center_of_mass_iterative(
+    p::AbstractParticles,
+    r_start::Number;
+    posprop=:pos,
+    massprop=:mass,
+    kwargs...,
+)
+    center_of_mass_iterative(p[posprop], p[massprop], r_start; kwargs...)
+end
+
+"""
+    center_of_mass_iterative_info(pos::AbstractMatrix{<:Number}, mass, r_start::Number; kwargs...)
+    center_of_mass_iterative_info(p::AbstractParticles, r_start::Number; posprop=:pos, massprop=:mass, kwargs...)
+
+Returns the center of mass of [`center_of_mass_iterative`](@ref) together with information on
+the iteration, as a named tuple with the fields
+
+- `center`: the center of mass
+- `radius`: the radius of the last sphere, whose particles determine the center
+- `n`: the number of particles in that sphere
+- `iterations`: the number of times the center was updated
+- `reason`: why the iteration stopped: `:limit_number` if the next sphere contains too few
+  particles, `:limit_radius` if its radius is below the limit, or `:single_particle` if the last
+  sphere contains a single particle
+
+The arguments and keyword arguments are the same as for [`center_of_mass_iterative`](@ref).
+
+# Examples
+```jldoctest
+julia> using FillArrays
+
+julia> pos = [4.0 4.2 3.8 4.0 4.0 -6.0 0.0 7.0; 3.0 3.0 3.0 3.2 2.8 0.0 -5.0 -6.0];
+
+julia> mass = Fill(1.0, 8);
+
+julia> info = center_of_mass_iterative_info(pos, mass, 10.0);
+
+julia> info.center
+2-element Vector{Float64}:
+ 4.0
+ 3.0
+
+julia> info.n, info.reason
+(1, :single_particle)
+
+julia> info = center_of_mass_iterative_info(pos, mass, 10.0; limit_fraction=0.5);
+
+julia> info.n, info.reason
+(5, :limit_number)
+```
+"""
+function center_of_mass_iterative_info(
     pos::AbstractMatrix{T},
     mass,
     r_start::R;
@@ -254,52 +312,109 @@ function center_of_mass_iterative(
             throw(DimensionMismatch("r0 must have $(length(r₀)) elements, got $(length(r0))"))
         copyto!(r₀, r0)
     end
+    r₀_prev = similar(r₀)
+    shrink = oneunit(S) - shrinking_factor
     r²_max = r_start^2
-    r²_limit = (limit_radius / (oneunit(S) - shrinking_factor))^2
+    r²_limit = (limit_radius / shrink)^2
 
-    # mask particles in initial sphere
-    r² = colnorm2(pos, r₀)
-    mask = r² .≤ r²_max # this will be reused further down
-    n = count(mask)
+    # positions and weights (masses without units) of the particles in the current sphere; the
+    # first n columns are used, and particles leaving the sphere are removed in place
+    ind = findall(≤(r²_max), colnorm2(pos, r₀))
+    n = length(ind)
     n > 0 || throw(ArgumentError("no particles within r_start = $r_start of r0"))
+    sphere_pos = pos[:, ind]
+    sphere_w = _sphere_weights(mass, ind)
+    # weighted sum of the positions in the sphere, in at least Float64 precision
+    possum = zeros(typeof(oneunit(float(T)) * 1.0), size(pos, 1))
+    wsum = _weighted_sum!(possum, sphere_pos, sphere_w, n)
 
     # get number limit for when the algorithm should stop; at least 1, so that the loop ends when
     # the sphere is empty
     nlimit = max(1, min(limit_number, ceil(Int, limit_fraction * n)))
+    r²_last = r²_max
+    n_last = n
+    iterations = 0
     while n ≥ nlimit && r²_max ≥ r²_limit
-        _mean_position!(r₀, pos, mass, mask)
+        copyto!(r₀_prev, r₀)
+        r₀ .= possum ./ wsum
+        iterations += 1
+        r²_last = r²_max
+        n_last = n
         # the center of a single particle is its position, which stays within every smaller sphere
-        n == 1 && break
-        r²_max *= (oneunit(S) - shrinking_factor)^2
+        n == 1 && return (; center=r₀, radius=sqrt(r²_last), n=n_last, iterations, reason=:single_particle)
+        r²_max *= shrink^2
 
-        r² = colnorm2(pos, r₀)
-        mask .= r² .≤ r²_max # reuse mask array
-        n = count(mask)
+        # the new sphere lies within the last one if the center moved by less than the difference
+        # of their radii; then only the particles of the last sphere can be in the new one
+        shift = sqrt(sum(i -> abs2(r₀[i] - r₀_prev[i]), eachindex(r₀, r₀_prev)))
+        if sqrt(r²_max) + shift ≤ sqrt(r²_last)
+            n, wsum = _keep_within!(possum, sphere_pos, sphere_w, n, r₀, r²_max)
+        else
+            ind = findall(≤(r²_max), colnorm2(pos, r₀))
+            n = length(ind)
+            sphere_pos = pos[:, ind]
+            sphere_w = _sphere_weights(mass, ind)
+            wsum = _weighted_sum!(possum, sphere_pos, sphere_w, n)
+        end
     end
 
-    return r₀
+    reason = n < nlimit ? :limit_number : :limit_radius
+    return (; center=r₀, radius=sqrt(r²_last), n=n_last, iterations, reason)
 end
 
-function center_of_mass_iterative(
+function center_of_mass_iterative_info(
     p::AbstractParticles,
     r_start::Number;
     posprop=:pos,
     massprop=:mass,
     kwargs...,
 )
-    center_of_mass_iterative(p[posprop], p[massprop], r_start; kwargs...)
+    center_of_mass_iterative_info(p[posprop], p[massprop], r_start; kwargs...)
 end
 
-function _mean_position!(r₀::AbstractVector, pos::AbstractMatrix, mass::AbstractVector, mask)
-    @views mean!(r₀, pos[:, mask], weights(CosmoParticles.ustrip_lazy(mass[mask])); dims=2)
+# weights of the particles in the sphere; equal masses are not needed for the mean position
+_sphere_weights(mass::AbstractVector, ind) = float.(CosmoParticles.ustrip_lazy(view(mass, ind)))
+_sphere_weights(::Union{Number,Nothing,AbstractFillVector}, _) = nothing
+
+_weight(w::AbstractVector, j) = w[j]
+_weight(::Nothing, _) = true
+
+# Sets `possum` to the weighted sum of the first n positions and returns the sum of the weights.
+function _weighted_sum!(possum, sphere_pos, sphere_w, n)
+    fill!(possum, zero(eltype(possum)))
+    wsum = 0.0
+    for j in 1:n
+        wj = _weight(sphere_w, j)
+        for d in eachindex(possum)
+            possum[d] += wj * sphere_pos[d, j]
+        end
+        wsum += wj
+    end
+    return wsum
 end
-function _mean_position!(
-    r₀::AbstractVector,
-    pos::AbstractMatrix,
-    _::Union{Number,Nothing,AbstractFillVector},
-    mask,
-)
-    @views mean!(r₀, pos[:, mask])
+
+# Moves the particles among the first n that lie within the sphere to the front, sets `possum` to
+# their weighted sum of positions, and returns their number and the sum of their weights.
+function _keep_within!(possum, sphere_pos, sphere_w, n, r₀, r²_max)
+    fill!(possum, zero(eltype(possum)))
+    wsum = 0.0
+    k = 0
+    for j in 1:n
+        r² = zero(abs2(zero(eltype(sphere_pos))))
+        for d in eachindex(r₀)
+            r² += abs2(sphere_pos[d, j] - r₀[d])
+        end
+        r² ≤ r²_max || continue
+        k += 1
+        wj = _weight(sphere_w, j)
+        for d in eachindex(possum)
+            sphere_pos[d, k] = sphere_pos[d, j]
+            possum[d] += wj * sphere_pos[d, k]
+        end
+        isnothing(sphere_w) || (sphere_w[k] = wj)
+        wsum += wj
+    end
+    return k, wsum
 end
 
 

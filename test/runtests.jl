@@ -213,6 +213,20 @@ end
         @test center_of_mass_iterative(fewpos .+ [0.05, 0.0], Fill(1.0, 8), 10.0) ≈ [4.05, 3.0]
         @test center_of_mass_iterative([1.0 5.0; 0.0 0.0], [1.0, 1.0], 2.0) == [1.0, 0.0]
 
+        # information on the iteration
+        info = center_of_mass_iterative_info(pos3, mass3, 1)
+        @test info.center == center_of_mass_iterative(pos3, mass3, 1)
+        @test center_of_mass_iterative_info(p3, 1) == info
+        @test info.reason == :limit_number
+        @test info.iterations > 0
+        info = center_of_mass_iterative_info(pos3, mass3, 1; limit_radius=0.2)
+        @test info.reason == :limit_radius
+        @test info.radius ≥ 0.2
+        info = center_of_mass_iterative_info([1.0 5.0; 0.0 0.0], [1.0, 1.0], 2.0)
+        @test info == (; center=[1.0, 0.0], radius=2.0, n=1, iterations=1, reason=:single_particle)
+        info = center_of_mass_iterative_info(fewpos, Fill(1.0, 8), 10.0; limit_radius=20.0, r0=[1.0, 1.0])
+        @test info == (; center=[1.0, 1.0], radius=10.0, n=8, iterations=0, reason=:limit_radius)
+
         # starting sphere around r0
         c = [1.0, 2.0, 3.0]
         com = center_of_mass_iterative(pos3, mass3, 1)
